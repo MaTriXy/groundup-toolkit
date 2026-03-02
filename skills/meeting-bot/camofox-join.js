@@ -612,29 +612,15 @@ function getExpectedAttendees() {
     screenshot_global = screenshot;
 
     try {
-        console.log("Launching Camoufox browser...");
-        const opts = await launchOptions({
-            headless: true,
-            os: "linux",
-            humanize: true,
-            enable_cache: true,
-        });
-        browser = await firefox.launch(opts);
-        console.log("Browser launched");
+        console.log("Connecting to existing LinkedIn browser (port 18801)...");
+        const { chromium } = require(CAMOFOX_DIR + "/node_modules/playwright-core");
+        browser = await chromium.connectOverCDP("http://127.0.0.1:18801");
+        console.log("Browser connected");
 
-        context = await browser.newContext({
-            viewport: { width: 1920, height: 1080 },
-            locale: "en-US",
-        });
-
-        if (fs.existsSync(COOKIES_PATH)) {
-            const raw = JSON.parse(fs.readFileSync(COOKIES_PATH, "utf8"));
-            const cookies = convertCookies(raw);
-            await context.addCookies(cookies);
-            console.log("Loaded " + cookies.length + " auth cookies");
-        } else {
-            console.log("WARNING: No cookies file found at " + COOKIES_PATH);
-        }
+        // Use existing context (already authenticated as christina@groundup.vc)
+        const contexts = browser.contexts();
+        context = contexts[0];
+        console.log("Using authenticated context (" + context.pages().length + " existing pages)");
 
         page = await context.newPage();
 
