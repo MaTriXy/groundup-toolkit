@@ -9,6 +9,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
+    authorized({ auth }) {
+      return !!auth
+    },
     signIn({ profile }) {
       // Only allow @groundup.vc emails
       return profile?.email?.endsWith("@groundup.vc") ?? false
