@@ -516,7 +516,7 @@ def check_replies():
         print("  No replies found.")
         return
 
-    threads = result.get('threads', [])
+    threads = result.get('threads') or []
     print(f"  Found {len(threads)} thread(s) to check")
 
     for thread in threads:
