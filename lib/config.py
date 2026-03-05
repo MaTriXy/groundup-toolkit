@@ -193,6 +193,11 @@ class ToolkitConfig:
             return p['stage_names'].get(stage_id, stage_id)
         return stage_id
 
+    @property
+    def hubspot_keep_on_radar_stage(self):
+        """Return the keep-on-radar stage ID from config, or fallback."""
+        return self._data['hubspot'].get('keep_on_radar_stage', '')
+
     def get_hubspot_owner_id(self, email):
         m = self.get_member_by_email(email)
         return m.get('hubspot_owner_id') if m else None

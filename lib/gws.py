@@ -383,8 +383,9 @@ def get_google_access_token():
         fd, token_path = tempfile.mkstemp(suffix='.json', prefix='gws-token-')
         os.close(fd)
         try:
+            from lib.config import config as _config
             result = subprocess.run(
-                ['gog', 'auth', 'tokens', 'export', 'christina@groundup.vc',
+                ['gog', 'auth', 'tokens', 'export', _config.assistant_email,
                  '--out', token_path, '--overwrite', '--no-input'],
                 capture_output=True, text=True, timeout=15,
             )

@@ -46,6 +46,7 @@ hubspot:
     #   default_stage: "your-stage-id"
     #   stage_names:
     #     "your-stage-id": "Qualified Leads"
+  keep_on_radar_stage: ""             # HubSpot deal stage ID for "Keep on Radar" deals
 
 scheduling:
   shabbat_aware: true                  # Skip Friday evening through Saturday evening

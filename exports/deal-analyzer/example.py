@@ -60,7 +60,9 @@ def main():
     print(f"Full HTML report:     {len(result['html_report'])} chars")
 
     # Save reports to files
-    safe_name = company.lower().replace(' ', '-').replace('/', '-')
+    # Security: sanitize filename to prevent path traversal
+    import re
+    safe_name = re.sub(r'[^\w.-]', '-', company.lower()).strip('-')[:100]
     with open(f"{safe_name}-report.html", "w") as f:
         f.write(result["html_report"])
     with open(f"{safe_name}-report.md", "w") as f:

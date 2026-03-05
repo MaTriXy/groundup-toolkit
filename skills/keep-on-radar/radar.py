@@ -45,7 +45,7 @@ from lib.hubspot import (
 WHATSAPP_ACCOUNT = config.whatsapp_account
 PORTAL_ID = config.hubspot_portal_id
 
-KEEP_ON_RADAR_STAGE = "1138024523"
+KEEP_ON_RADAR_STAGE = config.hubspot_keep_on_radar_stage or "1138024523"  # fallback for backward compat
 PASS_STAGE = "closedlost"
 PROCESSED_LABEL = "KoR-Processed"
 

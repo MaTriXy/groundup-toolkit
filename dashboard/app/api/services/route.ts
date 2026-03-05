@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { rateLimit } from "@/lib/rate-limit"
 import { defaultServices } from "@/lib/data/services"
 
-export async function GET() {
+// Security: rate limit services API to 60 requests per minute per IP
+const limiter = rateLimit({ interval: 60_000, limit: 60 })
+
+export async function GET(req: NextRequest) {
+  // Security: rate limiting
+  const { ok } = limiter.check(req)
+  if (!ok) {
+    return NextResponse.json({ error: "Too Many Requests" }, { status: 429 })
+  }
+
   // Security: explicit auth check (defense-in-depth beyond middleware)
   const session = await auth()
   if (!session) {
@@ -13,6 +23,12 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
+  // Security: rate limiting
+  const { ok: rl } = limiter.check(req)
+  if (!rl) {
+    return NextResponse.json({ error: "Too Many Requests" }, { status: 429 })
+  }
+
   // Security: explicit auth check (defense-in-depth beyond middleware)
   const session = await auth()
   if (!session) {

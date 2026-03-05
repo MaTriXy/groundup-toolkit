@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server"
 import { auth } from "@/lib/auth"
+import { rateLimit } from "@/lib/rate-limit"
 
 const MAX_MESSAGE_LENGTH = 10000
+
+// Security: rate limit chat to 30 requests per minute per IP
+const limiter = rateLimit({ interval: 60_000, limit: 30 })
 
 const responses: Record<string, string> = {
   default: `Hey! I'm Christina, your AI assistant at GroundUp. I can help you with deal sourcing, meeting prep, portfolio monitoring, and more.
@@ -34,6 +38,12 @@ Want me to pull the full report on any of these?`,
 }
 
 export async function POST(req: NextRequest) {
+  // Security: rate limiting
+  const { ok } = limiter.check(req)
+  if (!ok) {
+    return new Response("Too Many Requests", { status: 429 })
+  }
+
   // Security: explicit auth check (defense-in-depth beyond middleware)
   const session = await auth()
   if (!session) {

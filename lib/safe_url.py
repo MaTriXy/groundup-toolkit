@@ -56,13 +56,36 @@ def is_safe_url(url, allowed_domains=None):
         return False
 
 
+def _resolve_and_validate(hostname, allowed_domains):
+    """Resolve hostname, validate against allowlist and check for private IPs.
+
+    Returns list of resolved (family, ip_str) tuples, or None on failure.
+    """
+    parsed_fake = type('obj', (object,), {'hostname': hostname, 'scheme': 'https'})()
+    if not any(hostname == d or hostname.endswith('.' + d) for d in (allowed_domains or ALLOWED_DECK_DOMAINS)):
+        return None
+    try:
+        addrinfos = socket.getaddrinfo(hostname, None)
+        resolved = []
+        for family, _, _, _, sockaddr in addrinfos:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+                return None
+            resolved.append((family, sockaddr[0]))
+        return resolved if resolved else None
+    except (socket.gaierror, ValueError):
+        return None
+
+
 def safe_request(url, session=None, allowed_domains=None, **kwargs):
     """Fetch a URL with SSRF protection and safe redirect following.
 
     Validates each redirect hop against the domain allowlist.
+    Pins DNS resolution to prevent TOCTOU rebinding attacks.
     Returns the final requests.Response or None on security failure.
     """
     import requests as _requests
+    from urllib.parse import urlparse, urlunparse
     if session is None:
         session = _requests
 
@@ -76,7 +99,21 @@ def safe_request(url, session=None, allowed_domains=None, **kwargs):
             print(f"  Security: blocked request to disallowed URL: {current_url}", file=sys.stderr)
             return None
 
-        response = session.get(current_url, **kwargs)
+        # Security: pin DNS resolution to prevent TOCTOU rebinding
+        parsed = urlparse(current_url)
+        hostname = parsed.hostname
+        resolved = _resolve_and_validate(hostname, allowed_domains)
+        if not resolved:
+            import sys
+            print(f"  Security: DNS validation failed for {hostname}", file=sys.stderr)
+            return None
+
+        # Use resolved IP directly and pass original Host header
+        pinned_ip = resolved[0][1]
+        pinned_url = urlunparse(parsed._replace(netloc=pinned_ip + (f":{parsed.port}" if parsed.port else "")))
+        headers = kwargs.pop('headers', {})
+        headers['Host'] = hostname
+        response = session.get(pinned_url, headers=headers, verify=False, **kwargs)
 
         if response.status_code not in (301, 302, 303, 307, 308):
             return response
