@@ -3,6 +3,10 @@
 import { create } from "zustand"
 import { ChatMessage } from "@/lib/types"
 
+function generateId(): string {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36)
+}
+
 interface ChatState {
   messages: ChatMessage[]
   isStreaming: boolean
@@ -51,7 +55,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { serviceContext, addMessage, updateLastAssistantMessage, setStreaming } = get()
 
     const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       role: "user",
       content,
       timestamp: new Date(),
@@ -60,7 +64,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     addMessage(userMsg)
 
     const assistantMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       role: "assistant",
       content: "",
       timestamp: new Date(),
