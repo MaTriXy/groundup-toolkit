@@ -730,6 +730,29 @@ function getExpectedAttendees() {
 
         await screenshot("2-premute");
 
+        // Dismiss "Do you want people to see you in the meeting?" popup if present
+        try {
+            const dismissed = await page.evaluate(() => {
+                // Look for the X close button on the camera/mic permission dialog
+                const closeButtons = Array.from(document.querySelectorAll("button, [role=button]"));
+                const xBtn = closeButtons.find(b => {
+                    const label = (b.getAttribute("aria-label") || "").toLowerCase();
+                    return label.includes("close") || label.includes("dismiss");
+                });
+                if (xBtn) { xBtn.click(); return "close-button"; }
+                // Also try clicking "Use camera" or just the X icon
+                const useCamera = closeButtons.find(b => (b.textContent || "").includes("Use camera") && !(b.textContent || "").includes("microphone"));
+                if (useCamera) { useCamera.click(); return "use-camera"; }
+                return null;
+            });
+            if (dismissed) {
+                console.log("Dismissed camera/mic dialog via: " + dismissed);
+                await sleep(1500);
+            }
+        } catch (e) {
+            console.log("Dialog dismiss: " + e.message);
+        }
+
         // Click "Start" on Gemini note-taking before joining
         console.log("Enabling Gemini note-taking...");
         try {
