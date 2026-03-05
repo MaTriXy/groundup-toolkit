@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { MessageSquare } from "lucide-react"
+import { MessageSquare, HelpCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Service } from "@/lib/types"
 import { getIcon } from "@/lib/icons"
@@ -10,15 +10,14 @@ import { StatusBadge } from "@/components/layout/StatusBadge"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useChatStore } from "@/lib/store/chatStore"
+import { useServicesStore } from "@/lib/store/servicesStore"
 
 const categoryColors: Record<string, string> = {
   "Deal Sourcing": "bg-violet-500/15 text-violet-400 border-violet-500/20",
   "Portfolio Monitoring": "bg-blue-500/15 text-blue-400 border-blue-500/20",
-  "Outreach": "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
   "Scheduling": "bg-amber-500/15 text-amber-400 border-amber-500/20",
   "Content & Comms": "bg-pink-500/15 text-pink-400 border-pink-500/20",
   "Internal Ops": "bg-slate-500/15 text-slate-400 border-slate-500/20",
-  "Alerts & Notifications": "bg-red-500/15 text-red-400 border-red-500/20",
 }
 
 export function ServiceCard({
@@ -30,6 +29,7 @@ export function ServiceCard({
 }) {
   const Icon = getIcon(service.icon)
   const openChat = useChatStore((s) => s.openChat)
+  const openHelp = useServicesStore((s) => s.openHelp)
   const isActive = service.status === "active"
 
   return (
@@ -81,14 +81,23 @@ export function ServiceCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-muted-foreground">
-            Last run: {service.lastRun}
+            {service.lastRun}
           </span>
           <StatusBadge status={service.status} />
         </div>
       </div>
 
-      {/* Hover action */}
-      <div className="absolute inset-x-0 bottom-0 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pb-3">
+      {/* Hover actions */}
+      <div className="absolute inset-x-0 bottom-0 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pb-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => openHelp(service)}
+          className="h-7 text-xs text-muted-foreground hover:text-primary gap-1.5 bg-card/90 backdrop-blur-sm border border-border"
+        >
+          <HelpCircle className="h-3 w-3" />
+          How to use
+        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -96,7 +105,7 @@ export function ServiceCard({
           className="h-7 text-xs text-muted-foreground hover:text-primary gap-1.5 bg-card/90 backdrop-blur-sm border border-border"
         >
           <MessageSquare className="h-3 w-3" />
-          Chat about this
+          Chat
         </Button>
       </div>
     </motion.div>

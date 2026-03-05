@@ -4,23 +4,28 @@ import { useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useServicesStore } from "@/lib/store/servicesStore"
 import { ServiceCard } from "./ServiceCard"
+import { ServiceHelp } from "./ServiceHelp"
 import { ServiceCategory, Service } from "@/lib/types"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 const categories: (ServiceCategory | "all")[] = [
   "all",
   "Deal Sourcing",
-  "Portfolio Monitoring",
-  "Outreach",
   "Scheduling",
+  "Portfolio Monitoring",
   "Content & Comms",
   "Internal Ops",
-  "Alerts & Notifications",
 ]
 
 export function ServiceGrid() {
-  const { setServices, filteredServices, filterCategory, setFilterCategory } = useServicesStore()
+  const {
+    setServices,
+    filteredServices,
+    filterCategory,
+    setFilterCategory,
+    helpService,
+    closeHelp,
+  } = useServicesStore()
 
   const { data } = useQuery<Service[]>({
     queryKey: ["services"],
@@ -65,6 +70,9 @@ export function ServiceGrid() {
           <p className="text-sm">No services found</p>
         </div>
       )}
+
+      {/* Help modal */}
+      <ServiceHelp service={helpService} onClose={closeHelp} />
     </div>
   )
 }

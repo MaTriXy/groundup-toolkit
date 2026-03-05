@@ -24,6 +24,12 @@ import {
   MoreVertical,
   Activity,
   Zap,
+  Video,
+  Phone,
+  Linkedin,
+  ScrollText,
+  Eye,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react"
 
@@ -53,6 +59,12 @@ export const iconMap: Record<string, LucideIcon> = {
   MoreVertical,
   Activity,
   Zap,
+  Video,
+  Phone,
+  Linkedin,
+  ScrollText,
+  Eye,
+  HelpCircle,
 }
 
 export function getIcon(name: string): LucideIcon {

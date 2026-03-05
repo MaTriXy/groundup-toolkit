@@ -7,10 +7,13 @@ interface ServicesState {
   services: Service[]
   filterCategory: ServiceCategory | "all"
   searchQuery: string
+  helpService: Service | null
   setServices: (services: Service[]) => void
   toggleService: (id: string, enabled: boolean) => void
   setFilterCategory: (category: ServiceCategory | "all") => void
   setSearchQuery: (query: string) => void
+  openHelp: (service: Service) => void
+  closeHelp: () => void
   filteredServices: () => Service[]
 }
 
@@ -18,6 +21,7 @@ export const useServicesStore = create<ServicesState>((set, get) => ({
   services: [],
   filterCategory: "all",
   searchQuery: "",
+  helpService: null,
 
   setServices: (services) => set({ services }),
 
@@ -32,6 +36,8 @@ export const useServicesStore = create<ServicesState>((set, get) => ({
 
   setFilterCategory: (category) => set({ filterCategory: category }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  openHelp: (service) => set({ helpService: service }),
+  closeHelp: () => set({ helpService: null }),
 
   filteredServices: () => {
     const { services, filterCategory, searchQuery } = get()

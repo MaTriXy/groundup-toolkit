@@ -3,11 +3,9 @@ export type ServiceStatus = "active" | "inactive" | "degraded"
 export type ServiceCategory =
   | "Deal Sourcing"
   | "Portfolio Monitoring"
-  | "Outreach"
   | "Scheduling"
   | "Content & Comms"
   | "Internal Ops"
-  | "Alerts & Notifications"
 
 export interface Service {
   id: string
@@ -19,6 +17,9 @@ export interface Service {
   lastRun: string
   canToggle: boolean
   enabledForUser?: boolean
+  helpText: string
+  trigger: string
+  commands?: string[]
 }
 
 export interface ChatMessage {
