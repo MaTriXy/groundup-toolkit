@@ -91,4 +91,4 @@ content-writer test
 
 Required environment variables:
 - `ANTHROPIC_API_KEY` — Claude API for generation + humanizer + voice analysis
-- `BRAVE_API_KEY` — Brave Search for topic research (optional but recommended)
+- `BRAVE_SEARCH_API_KEY` — Brave Search for topic research (optional but recommended)

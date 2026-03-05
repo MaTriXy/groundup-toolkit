@@ -10,6 +10,7 @@ import sys
 import subprocess
 import os
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import re
 
 # Load config from toolkit
@@ -66,13 +67,12 @@ def main():
         print(f"Error: Unknown phone number {phone}")
         sys.exit(1)
 
-    # Construct datetime strings (Israel timezone +02:00)
-    start_dt = f"{date}T{time}:00+02:00"
-
-    # Calculate end time
-    start_time = datetime.fromisoformat(start_dt.replace('+02:00', ''))
+    # Construct datetime strings with proper Israel timezone
+    tz = ZoneInfo('Asia/Jerusalem')
+    start_time = datetime.strptime(f"{date}T{time}:00", "%Y-%m-%dT%H:%M:%S").replace(tzinfo=tz)
     end_time = start_time + timedelta(minutes=duration)
-    end_dt = end_time.strftime("%Y-%m-%dT%H:%M:%S") + "+02:00"
+    start_dt = start_time.isoformat()
+    end_dt = end_time.isoformat()
 
     # Set GOG environment from config
     os.environ.setdefault("GOG_KEYRING_PASSWORD", os.getenv("GOG_KEYRING_PASSWORD", ""))

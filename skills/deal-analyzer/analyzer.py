@@ -28,136 +28,19 @@ from datetime import datetime
 # Load shared config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from lib.config import config
+from lib.claude import call_claude
+from lib.brave import brave_search
+from lib.whatsapp import send_whatsapp
+from lib.email import send_email
+from lib.hubspot import search_company as _search_company, add_note as _add_note
 
 # --- Constants ---
-
-ANTHROPIC_API_KEY = config.anthropic_api_key
-BRAVE_SEARCH_API_KEY = config.brave_search_api_key
-MATON_API_KEY = config.maton_api_key
-MATON_BASE_URL = "https://gateway.maton.ai/hubspot/crm/v3/objects"
-GOG_ACCOUNT = config.assistant_email
 _STATE_DIR = os.path.expanduser("~/.groundup-toolkit/state")
 os.makedirs(_STATE_DIR, mode=0o700, exist_ok=True)
 STATE_FILE = os.path.join(_STATE_DIR, "deal-analyzer-state.json")
 DEMO_STATE_FILE = os.path.join(_STATE_DIR, "deal-analyzer-demo.json")
 
-# --- Core API Functions ---
-
-
-def call_claude(prompt, system_prompt="", model="claude-sonnet-4-20250514", max_tokens=4096):
-    payload = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    if system_prompt:
-        payload["system"] = system_prompt
-
-    headers = {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
-    }
-
-    for attempt in range(5):
-        response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers=headers,
-            json=payload,
-            timeout=120
-        )
-        if response.status_code == 200:
-            return response.json()["content"][0]["text"]
-
-        if response.status_code == 429:
-            wait = min(15 * (attempt + 1), 60)
-            print(f"  Rate limited, waiting {wait}s (attempt {attempt + 1}/5)...", file=sys.stderr)
-            time.sleep(wait)
-            continue
-
-        if response.status_code == 529:
-            wait = 30
-            print(f"  API overloaded, waiting {wait}s...", file=sys.stderr)
-            time.sleep(wait)
-            continue
-
-        print(f"  Claude API error: HTTP {response.status_code}", file=sys.stderr)
-        return f"Analysis failed — API error ({response.status_code})."
-
-    return "Analysis failed — rate limit exceeded after retries."
-
-
-def brave_search(query, count=5):
-    if not BRAVE_SEARCH_API_KEY:
-        return []
-    try:
-        response = requests.get(
-            "https://api.search.brave.com/res/v1/web/search",
-            headers={"Accept": "application/json", "X-Subscription-Token": BRAVE_SEARCH_API_KEY},
-            params={"q": query, "count": count},
-            timeout=10
-        )
-        if response.status_code != 200:
-            return []
-        return [
-            {"title": r.get("title", ""), "url": r.get("url", ""), "description": r.get("description", "")}
-            for r in response.json().get("web", {}).get("results", [])
-        ]
-    except Exception as e:
-        print(f"  Search error: {e}", file=sys.stderr)
-        return []
-
-
-def send_whatsapp(phone, message, max_retries=3, retry_delay=3):
-    for attempt in range(1, max_retries + 1):
-        try:
-            cmd = [
-                'openclaw', 'message', 'send',
-                '--channel', 'whatsapp',
-                '--target', phone,
-                '--message', message
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            if result.returncode == 0:
-                return True
-            else:
-                print(f"  WhatsApp attempt {attempt}/{max_retries}: {result.stderr.strip()[:100]}", file=sys.stderr)
-                if attempt < max_retries:
-                    time.sleep(retry_delay)
-        except Exception as e:
-            print(f"  WhatsApp attempt {attempt}/{max_retries}: {e}", file=sys.stderr)
-            if attempt < max_retries:
-                time.sleep(retry_delay)
-    return False
-
-
-def send_email(to_email, subject, body):
-    try:
-        fd, body_file = tempfile.mkstemp(suffix='.txt', prefix='deal-email-')
-        with os.fdopen(fd, 'w') as f:
-            f.write(body)
-        cmd = [
-            'gog', 'gmail', 'send',
-            '--to', to_email,
-            '--subject', subject,
-            '--body-file', body_file,
-            '--account', GOG_ACCOUNT,
-            '--force', '--no-input'
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        try:
-            os.unlink(body_file)
-        except OSError:
-            pass
-        if result.returncode == 0:
-            print(f"  Email sent to {to_email}")
-            return True
-        else:
-            print(f"  Email failed: {result.stderr.strip()[:200]}", file=sys.stderr)
-            return False
-    except Exception as e:
-        print(f"  Email exception: {e}", file=sys.stderr)
-        return False
+# call_claude, brave_search, send_whatsapp, send_email imported from lib/
 
 
 # --- Google Docs ---
@@ -487,54 +370,13 @@ def clear_demo_state():
 
 def hubspot_search_company(company_name):
     """Search HubSpot for a company by name. Returns company ID or None."""
-    if not MATON_API_KEY:
-        print("  MATON_API_KEY not set, skipping HubSpot", file=sys.stderr)
-        return None
-    headers = {"Authorization": f"Bearer {MATON_API_KEY}", "Content-Type": "application/json"}
-    try:
-        response = requests.post(
-            f"{MATON_BASE_URL}/companies/search",
-            headers=headers,
-            json={
-                "filterGroups": [{"filters": [{"propertyName": "name", "operator": "CONTAINS_TOKEN", "value": company_name}]}],
-                "properties": ["name", "domain"],
-                "limit": 5,
-            },
-            timeout=10,
-        )
-        if response.status_code == 200:
-            results = response.json().get('results', [])
-            for r in results:
-                if r.get('properties', {}).get('name', '').lower() == company_name.lower():
-                    return r['id']
-            if results:
-                return results[0]['id']
-        return None
-    except Exception as e:
-        print(f"  HubSpot search error: {e}", file=sys.stderr)
-        return None
+    result = _search_company(name=company_name)
+    return result['id'] if result else None
 
 
 def hubspot_add_note(company_id, note_text):
     """Add a note to a HubSpot company."""
-    headers = {"Authorization": f"Bearer {MATON_API_KEY}", "Content-Type": "application/json"}
-    try:
-        response = requests.post(
-            f"{MATON_BASE_URL}/notes",
-            headers=headers,
-            json={
-                "properties": {
-                    "hs_timestamp": str(int(datetime.now().timestamp() * 1000)),
-                    "hs_note_body": note_text,
-                },
-                "associations": [{"to": {"id": company_id}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 190}]}],
-            },
-            timeout=10,
-        )
-        return response.status_code in [200, 201]
-    except Exception as e:
-        print(f"  HubSpot note error: {e}", file=sys.stderr)
-        return False
+    return _add_note(company_id, note_text, object_type="companies")
 
 
 # --- Phase 1: Deck Extraction ---

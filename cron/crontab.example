@@ -10,6 +10,7 @@
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 TOOLKIT_ROOT=/path/to/groundup-toolkit
+MAILTO=""
 
 # Uses load-env.sh to export only the secrets each job needs,
 # instead of sourcing the entire .env into every process.
@@ -40,14 +41,23 @@ TOOLKIT_ROOT=/path/to/groundup-toolkit
 # Scheduled tasks (Shabbat-aware) - every 2 hours
 0 */2 * * * $TOOLKIT_ROOT/scripts/run-scheduled.sh >> /var/log/scheduled.log 2>&1
 
-# Founder Scout - daily scan at 7:00 AM
+# Founder Scout - daily scan at 7:00 AM UTC
 0 7 * * * $TOOLKIT_ROOT/scripts/load-env.sh founder-scout -- $TOOLKIT_ROOT/.venv/bin/python3 $TOOLKIT_ROOT/skills/founder-scout/scout.py scan >> /var/log/founder-scout.log 2>&1
 
-# Founder Scout - weekly briefing on Sunday at 8:00 AM
+# Founder Scout - weekly briefing on Sunday at 8:00 AM UTC
 0 8 * * 0 $TOOLKIT_ROOT/scripts/load-env.sh founder-scout -- $TOOLKIT_ROOT/.venv/bin/python3 $TOOLKIT_ROOT/skills/founder-scout/scout.py briefing >> /var/log/founder-scout.log 2>&1
 
-# Founder Scout - watchlist re-scan on Wed/Sat at 14:00
+# Founder Scout - watchlist re-scan on Wed/Sat at 14:00 UTC
 0 14 * * 3,6 $TOOLKIT_ROOT/scripts/load-env.sh founder-scout -- $TOOLKIT_ROOT/.venv/bin/python3 $TOOLKIT_ROOT/skills/founder-scout/scout.py watchlist-update >> /var/log/founder-scout.log 2>&1
+
+# Keep on Radar - monthly review on 15th at 9:00 AM UTC
+0 9 15 * * $TOOLKIT_ROOT/scripts/load-env.sh keep-on-radar -- $TOOLKIT_ROOT/.venv/bin/python3 $TOOLKIT_ROOT/skills/keep-on-radar/radar.py review >> /var/log/keep-on-radar.log 2>&1
+
+# Keep on Radar - check replies every 2 hours
+0 */2 * * * $TOOLKIT_ROOT/scripts/load-env.sh keep-on-radar -- $TOOLKIT_ROOT/.venv/bin/python3 $TOOLKIT_ROOT/skills/keep-on-radar/radar.py check-replies >> /var/log/keep-on-radar.log 2>&1
+
+# Daily maintenance - system updates at 4:00 AM UTC
+0 4 * * * $TOOLKIT_ROOT/scripts/daily-maintenance.sh >> /var/log/daily-maintenance.log 2>&1
 
 # NOTE: Log files are written to /var/log/. Make sure the cron user has
 # write access, or change paths to e.g. $TOOLKIT_ROOT/logs/

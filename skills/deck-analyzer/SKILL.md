@@ -1,6 +1,6 @@
 ---
 name: deck-analyzer
-description: Extract structured information from pitch decks using AI. Analyzes decks from DocSend, Google Drive, Dropbox, or PDF links to extract company info, product details, team, traction, and fundraising details.
+description: "[DEPRECATED] Use deal-analyzer instead. Extract structured information from pitch decks."
 version: 1.0.0
 author: GroundUp VC
 actions:
@@ -9,7 +9,9 @@ actions:
   - test
 ---
 
-# Deck Analyzer Skill
+# Deck Analyzer Skill [DEPRECATED]
+
+> **This skill is deprecated.** Use `deal-analyzer` instead, which includes all deck extraction capabilities plus web research, 12-section analysis, retry logic, and full HubSpot integration.
 
 AI-powered pitch deck analysis that extracts structured company information from various deck sources.
 

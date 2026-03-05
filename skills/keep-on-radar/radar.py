@@ -31,14 +31,17 @@ from datetime import datetime
 # Load shared config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from lib.config import config
+from lib.claude import call_claude
+from lib.brave import brave_search
+from lib.whatsapp import send_whatsapp
+from lib.email import send_email
+from lib.hubspot import (
+    fetch_deals_by_stage, get_company_for_deal as _get_company_for_deal,
+    update_deal_stage, add_note, search_company
+)
 
 # --- Configuration ---
 
-MATON_BASE_URL = "https://gateway.maton.ai/hubspot"
-MATON_API_KEY = config.maton_api_key
-ANTHROPIC_API_KEY = config.anthropic_api_key
-BRAVE_SEARCH_API_KEY = config.brave_search_api_key
-GOG_ACCOUNT = config.assistant_email
 WHATSAPP_ACCOUNT = config.whatsapp_account
 PORTAL_ID = config.hubspot_portal_id
 
@@ -66,10 +69,6 @@ for m in config.team_members:
     if m.get('hubspot_owner_id'):
         OWNER_TO_EMAIL[str(m['hubspot_owner_id'])] = m['email']
 
-HEADERS = {
-    "Authorization": f"Bearer {MATON_API_KEY}",
-    "Content-Type": "application/json"
-}
 
 
 # --- Database ---
@@ -131,77 +130,22 @@ class RadarDatabase:
         conn.close()
 
 
-# --- Brave Search + Claude (from research-founder) ---
-
-def brave_search(query, count=5):
-    """Search using Brave Search API."""
-    if not BRAVE_SEARCH_API_KEY:
-        return []
-    try:
-        response = requests.get(
-            "https://api.search.brave.com/res/v1/web/search",
-            headers={"Accept": "application/json", "X-Subscription-Token": BRAVE_SEARCH_API_KEY},
-            params={"q": query, "count": count},
-            timeout=10
-        )
-        if response.status_code != 200:
-            return []
-        return [
-            {"title": r.get("title", ""), "url": r.get("url", ""), "description": r.get("description", "")}
-            for r in response.json().get("web", {}).get("results", [])
-        ]
-    except Exception as e:
-        print(f"  Search error: {e}", file=sys.stderr)
-        return []
-
-
-def call_claude(prompt, system_prompt="", model="claude-sonnet-4-20250514", max_tokens=4096):
-    """Call Claude API."""
-    payload = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    if system_prompt:
-        payload["system"] = system_prompt
-
-    response = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
-        },
-        json=payload,
-        timeout=60
-    )
-    if response.status_code != 200:
-        print(f"  Claude API error: HTTP {response.status_code}", file=sys.stderr)
-        return "Research unavailable — API error."
-    return response.json()["content"][0]["text"]
+# call_claude, brave_search imported from lib/
 
 
 # --- HubSpot Operations ---
 
 def fetch_radar_deals():
     """Fetch all deals in Keep on Radar stage, grouped by owner email."""
-    url = f"{MATON_BASE_URL}/crm/v3/objects/deals/search"
-    payload = {
-        "filterGroups": [{"filters": [{"propertyName": "dealstage", "operator": "EQ", "value": KEEP_ON_RADAR_STAGE}]}],
-        "properties": ["dealname", "hubspot_owner_id", "description", "createdate", "hs_lastmodifieddate"],
-        "limit": 100
-    }
-    response = requests.post(url, headers=HEADERS, json=payload, timeout=15)
-    if response.status_code != 200:
-        print(f"Error fetching deals: {response.status_code}", file=sys.stderr)
+    deals = fetch_deals_by_stage(KEEP_ON_RADAR_STAGE)
+    if not deals:
         return {}
 
-    deals = response.json().get("results", [])
     print(f"  Found {len(deals)} deals in Keep on Radar")
 
     # Fetch associated company for each deal
     for deal in deals:
-        deal['_company'] = get_company_for_deal(deal['id'])
+        deal['_company'] = _get_company_for_deal(deal['id'])
 
     # Group by owner
     grouped = {}
@@ -209,72 +153,26 @@ def fetch_radar_deals():
         owner_id = deal['properties'].get('hubspot_owner_id', '')
         owner_email = OWNER_TO_EMAIL.get(str(owner_id))
         if not owner_email:
-            print(f"  ⚠ Unknown owner {owner_id} for deal {deal['properties'].get('dealname', '?')}")
+            print(f"  Unknown owner {owner_id} for deal {deal['properties'].get('dealname', '?')}")
             continue
         grouped.setdefault(owner_email, []).append(deal)
 
     return grouped
 
 
-def get_company_for_deal(deal_id):
-    """Get the associated company for a deal."""
-    try:
-        assoc_url = f"{MATON_BASE_URL}/crm/v4/objects/deals/{deal_id}/associations/companies"
-        response = requests.get(assoc_url, headers=HEADERS, timeout=10)
-        if response.status_code != 200:
-            return None
-
-        results = response.json().get("results", [])
-        if not results:
-            return None
-
-        company_id = results[0]["toObjectId"]
-        company_url = f"{MATON_BASE_URL}/crm/v3/objects/companies/{company_id}"
-        response = requests.get(company_url, headers=HEADERS, params={"properties": "name,domain,description"}, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        return None
-    except Exception:
-        return None
-
-
 def move_deal_to_pass(deal_id, reason):
     """Move deal to closedlost (Pass) stage and add a note."""
-    update_url = f"{MATON_BASE_URL}/crm/v3/objects/deals/{deal_id}"
-    response = requests.patch(update_url, headers=HEADERS, json={
-        "properties": {"dealstage": PASS_STAGE, "closedate": datetime.now().strftime("%Y-%m-%d")}
-    }, timeout=10)
-
-    if response.status_code != 200:
-        print(f"  ✗ Failed to move deal {deal_id}: {response.status_code}", file=sys.stderr)
+    if not update_deal_stage(deal_id, PASS_STAGE, close_date=datetime.now().strftime("%Y-%m-%d")):
         return False
 
-    print(f"  ✓ Moved deal {deal_id} to Pass")
-
-    # Add note
-    note_url = f"{MATON_BASE_URL}/crm/v3/objects/notes"
-    requests.post(note_url, headers=HEADERS, json={
-        "properties": {
-            "hs_timestamp": str(int(datetime.now().timestamp() * 1000)),
-            "hs_note_body": f"Deal moved to Pass via Keep on Radar review\n\nReason: {reason}\nDate: {datetime.now().strftime('%Y-%m-%d')}"
-        },
-        "associations": [{"to": {"id": deal_id}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 214}]}]
-    }, timeout=10)
-
+    print(f"  Moved deal {deal_id} to Pass")
+    add_note(deal_id, f"Deal moved to Pass via Keep on Radar review\n\nReason: {reason}\nDate: {datetime.now().strftime('%Y-%m-%d')}")
     return True
 
 
 def add_note_to_deal(deal_id, note_text):
     """Add a note to a deal."""
-    note_url = f"{MATON_BASE_URL}/crm/v3/objects/notes"
-    response = requests.post(note_url, headers=HEADERS, json={
-        "properties": {
-            "hs_timestamp": str(int(datetime.now().timestamp() * 1000)),
-            "hs_note_body": note_text
-        },
-        "associations": [{"to": {"id": deal_id}, "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 214}]}]
-    }, timeout=10)
-    return response.status_code in [200, 201]
+    return add_note(deal_id, note_text)
 
 
 # --- Research ---
@@ -445,61 +343,7 @@ def format_whatsapp_summary(owner_first_name, deals_with_research):
 
 # --- Sending ---
 
-def send_email(to_email, subject, body):
-    """Send email using gog CLI with body file."""
-    try:
-        fd, body_file = tempfile.mkstemp(suffix='.txt', prefix='radar-email-')
-        with os.fdopen(fd, 'w') as f:
-            f.write(body)
-
-        cmd = [
-            'gog', 'gmail', 'send',
-            '--to', to_email,
-            '--subject', subject,
-            '--body-file', body_file,
-            '--account', GOG_ACCOUNT,
-            '--force', '--no-input'
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        try:
-            os.unlink(body_file)
-        except OSError:
-            pass
-
-        if result.returncode == 0:
-            print(f"  ✓ Email sent to {to_email}")
-            return True
-        else:
-            print(f"  Email failed for {to_email}", file=sys.stderr)
-            return False
-    except Exception as e:
-        print(f"  ✗ Email exception for {to_email}: {e}", file=sys.stderr)
-        return False
-
-
-def send_whatsapp(phone, message, max_retries=3, retry_delay=3):
-    """Send WhatsApp message via OpenClaw with retry."""
-    for attempt in range(1, max_retries + 1):
-        try:
-            cmd = [
-                'openclaw', 'message', 'send',
-                '--channel', 'whatsapp',
-                '--target', phone,
-                '--message', message
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            if result.returncode == 0:
-                print(f"  ✓ WhatsApp sent to {phone}" + (f" (attempt {attempt})" if attempt > 1 else ""))
-                return True
-            else:
-                print(f"  WhatsApp attempt {attempt}/{max_retries} failed", file=sys.stderr)
-                if attempt < max_retries:
-                    time.sleep(retry_delay)
-        except Exception as e:
-            print(f"  ✗ Attempt {attempt}/{max_retries} exception: {e}", file=sys.stderr)
-            if attempt < max_retries:
-                time.sleep(retry_delay)
-    return False
+# send_email and send_whatsapp imported from lib/
 
 
 # --- Gmail Polling ---

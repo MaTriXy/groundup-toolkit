@@ -1,4 +1,4 @@
-#\!/bin/bash
+#!/bin/bash
 # Google Workspace OpenClaw Skill - Using gog CLI
 
 # Env vars (GOG_KEYRING_PASSWORD, GOG_ACCOUNT, etc.) should be set before running.

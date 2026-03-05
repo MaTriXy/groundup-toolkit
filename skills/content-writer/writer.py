@@ -19,14 +19,15 @@ from datetime import datetime, timezone
 # Load shared config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from lib.config import config
+from lib.claude import call_claude
+from lib.brave import brave_search
+from lib.whatsapp import send_whatsapp
+from lib.email import send_email
 
 # --- Constants ---
 
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 PROFILES_DIR = os.path.join(SKILL_DIR, 'profiles')
-ANTHROPIC_API_KEY = config.anthropic_api_key
-BRAVE_SEARCH_API_KEY = config.brave_search_api_key
-GOG_ACCOUNT = config.assistant_email
 
 # Content type definitions
 CONTENT_TYPES = {
@@ -513,27 +514,6 @@ def format_business_profile(data):
 
 # --- Research ---
 
-def brave_search(query, count=5):
-    """Search using Brave Search API."""
-    if not BRAVE_SEARCH_API_KEY:
-        return []
-    try:
-        response = requests.get(
-            "https://api.search.brave.com/res/v1/web/search",
-            headers={"Accept": "application/json", "X-Subscription-Token": BRAVE_SEARCH_API_KEY},
-            params={"q": query, "count": count},
-            timeout=10
-        )
-        if response.status_code != 200:
-            return []
-        return [
-            {"title": r.get("title", ""), "url": r.get("url", ""), "description": r.get("description", "")}
-            for r in response.json().get("web", {}).get("results", [])
-        ]
-    except Exception as e:
-        print(f"  Search error: {e}", file=sys.stderr)
-        return []
-
 
 def extract_search_queries(message):
     """Extract 1-2 search queries from the user's content request using Haiku."""
@@ -743,32 +723,6 @@ def build_system_prompt(content_type, business_profile_data, message, member_dir
     return '\n'.join(parts)
 
 
-# --- Claude API ---
-
-def call_claude(prompt, system_prompt="", model="claude-sonnet-4-20250514", max_tokens=4096):
-    payload = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    if system_prompt:
-        payload["system"] = system_prompt
-
-    response = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json"
-        },
-        json=payload,
-        timeout=90
-    )
-    if response.status_code != 200:
-        print(f"Claude API error: {response.status_code} {response.text[:200]}", file=sys.stderr)
-        return "Content generation failed — API error."
-    return response.json()["content"][0]["text"]
-
 
 # --- Humanizer ---
 
@@ -811,60 +765,7 @@ def humanize_content(content):
 
 # --- Delivery ---
 
-def send_whatsapp(phone, message, max_retries=3, retry_delay=3):
-    import time
-    for attempt in range(1, max_retries + 1):
-        try:
-            cmd = [
-                'openclaw', 'message', 'send',
-                '--channel', 'whatsapp',
-                '--target', phone,
-                '--message', message
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            if result.returncode == 0:
-                print(f"  ✓ WhatsApp sent to {phone}" + (f" (attempt {attempt})" if attempt > 1 else ""))
-                return True
-            else:
-                print(f"  ✗ Attempt {attempt}/{max_retries}: {result.stderr.strip()[:100]}", file=sys.stderr)
-                if attempt < max_retries:
-                    time.sleep(retry_delay)
-        except Exception as e:
-            print(f"  ✗ Attempt {attempt}/{max_retries}: {e}", file=sys.stderr)
-            if attempt < max_retries:
-                time.sleep(retry_delay)
-    return False
-
-
-def send_email(to_email, subject, body):
-    try:
-        fd, body_file = tempfile.mkstemp(suffix='.txt', prefix='cw-email-')
-        with os.fdopen(fd, 'w') as f:
-            f.write(body)
-
-        cmd = [
-            'gog', 'gmail', 'send',
-            '--to', to_email,
-            '--subject', subject,
-            '--body-file', body_file,
-            '--account', GOG_ACCOUNT,
-            '--force', '--no-input'
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        try:
-            os.unlink(body_file)
-        except OSError:
-            pass
-
-        if result.returncode == 0:
-            print(f"  ✓ Email sent to {to_email}")
-            return True
-        else:
-            print(f"  ✗ Email failed: {result.stderr.strip()[:200]}", file=sys.stderr)
-            return False
-    except Exception as e:
-        print(f"  ✗ Email exception: {e}", file=sys.stderr)
-        return False
+# send_whatsapp and send_email imported from lib.whatsapp and lib.email
 
 
 def split_for_whatsapp(text, max_chars=3800):

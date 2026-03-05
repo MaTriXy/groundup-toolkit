@@ -21,6 +21,12 @@ import pytz
 # Shared config loader
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from lib.config import config
+from lib.whatsapp import send_whatsapp
+from lib.email import send_email
+from lib.hubspot import (
+    search_company as _search_company, get_deals_for_company,
+    get_latest_note as _get_latest_note
+)
 
 # Enrichment library integration
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
@@ -32,10 +38,7 @@ except ImportError:
     print("Warning: Enrichment library not available")
     ENRICHMENT_AVAILABLE = False
 
-GOG_ACCOUNT = config.assistant_email
 WHATSAPP_ACCOUNT = config.whatsapp_account
-MATON_API_KEY = config.maton_api_key
-MATON_BASE_URL = "https://gateway.maton.ai/hubspot/crm/v3/objects"
 
 # Persistent database path (survives reboots, unlike /tmp)
 _TOOLKIT_ROOT = os.environ.get('TOOLKIT_ROOT', os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -179,47 +182,9 @@ def format_meeting_time(start_time_str, timezone_str):
 
 
 def send_whatsapp_message(phone, message, max_retries=3, retry_delay=3):
-    """Send WhatsApp message via OpenClaw with retry logic.
-
-    Fail fast (3 retries, 3s delay) to avoid blocking reminders for other
-    team members. Falls back to email if all retries fail.
-    """
-    for attempt in range(1, max_retries + 1):
-        try:
-            cmd = [
-                'openclaw', 'message', 'send',
-                '--channel', 'whatsapp',
-                '--account', WHATSAPP_ACCOUNT,
-                '--target', phone,
-                '--message', message
-            ]
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=15
-            )
-
-            if result.returncode == 0:
-                print(f"  ✓ Sent to {phone}" + (f" (attempt {attempt})" if attempt > 1 else ""))
-                return True
-            else:
-                error_msg = result.stderr.strip()
-                print(f"  ✗ Attempt {attempt}/{max_retries} failed for {phone}: {error_msg}", file=sys.stderr)
-                if attempt < max_retries:
-                    print(f"    Retrying in {retry_delay}s...", file=sys.stderr)
-                    time.sleep(retry_delay)
-                else:
-                    print(f"  ✗ All {max_retries} attempts failed for {phone}", file=sys.stderr)
-                    return False
-        except Exception as e:
-            print(f"  ✗ Attempt {attempt}/{max_retries} exception for {phone}: {e}", file=sys.stderr)
-            if attempt < max_retries:
-                time.sleep(retry_delay)
-            else:
-                return False
-    return False
+    """Send WhatsApp message via OpenClaw with retry logic."""
+    return send_whatsapp(phone, message, account=WHATSAPP_ACCOUNT,
+                         max_retries=max_retries, retry_delay=retry_delay)
 
 
 
@@ -308,125 +273,18 @@ def is_internal_meeting(attendees, owner_email):
 
 
 def search_hubspot_company(email_domain):
-    """Search HubSpot for company by domain"""
-    if not MATON_API_KEY:
-        return None
-
-    try:
-        headers = {
-            'Authorization': f'Bearer {MATON_API_KEY}',
-            'Content-Type': 'application/json'
-        }
-
-        # Search for company by domain
-        url = f"{MATON_BASE_URL}/companies/search"
-        payload = {
-            "filterGroups": [{
-                "filters": [{
-                    "propertyName": "domain",
-                    "operator": "EQ",
-                    "value": email_domain
-                }]
-            }],
-            "properties": ["name", "domain", "industry", "description"],
-            "limit": 1
-        }
-
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
-
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('results') and len(data['results']) > 0:
-                return data['results'][0]
-
-        return None
-    except Exception as e:
-        print(f"  Error searching HubSpot: {e}", file=sys.stderr)
-        return None
+    """Search HubSpot for company by domain."""
+    return _search_company(domain=email_domain)
 
 
 def get_company_deals(company_id):
-    """Get active deals for a company"""
-    if not MATON_API_KEY or not company_id:
-        return []
-
-    try:
-        headers = {
-            'Authorization': f'Bearer {MATON_API_KEY}',
-            'Content-Type': 'application/json'
-        }
-
-        # Get deals associated with company
-        url = f"{MATON_BASE_URL}/companies/{company_id}/associations/deals"
-
-        response = requests.get(url, headers=headers, timeout=10)
-
-        if response.status_code == 200:
-            data = response.json()
-            deal_ids = [assoc['id'] for assoc in data.get('results', [])]
-
-            if not deal_ids:
-                return []
-
-            # Get deal details
-            deals = []
-            for deal_id in deal_ids[:3]:  # Limit to 3 most recent deals
-                deal_url = f"{MATON_BASE_URL}/deals/{deal_id}"
-                deal_response = requests.get(
-                    deal_url,
-                    headers=headers,
-                    params={'properties': 'dealname,dealstage,amount,closedate'},
-                    timeout=10
-                )
-
-                if deal_response.status_code == 200:
-                    deals.append(deal_response.json())
-
-            return deals
-
-        return []
-    except Exception as e:
-        print(f"  Error fetching deals: {e}", file=sys.stderr)
-        return []
+    """Get active deals for a company."""
+    return get_deals_for_company(company_id, limit=3)
 
 
 def get_latest_note(company_id):
-    """Get the latest note/engagement for a company"""
-    if not MATON_API_KEY or not company_id:
-        return None
-
-    try:
-        headers = {
-            'Authorization': f'Bearer {MATON_API_KEY}',
-            'Content-Type': 'application/json'
-        }
-
-        # Get engagements (notes) associated with company
-        url = f"{MATON_BASE_URL}/companies/{company_id}/associations/notes"
-
-        response = requests.get(url, headers=headers, params={'limit': 1}, timeout=10)
-
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('results') and len(data['results']) > 0:
-                note_id = data['results'][0]['id']
-
-                # Get note details
-                note_url = f"{MATON_BASE_URL}/notes/{note_id}"
-                note_response = requests.get(note_url, headers=headers, params={"properties": "hs_note_body"}, timeout=10)
-
-                if note_response.status_code == 200:
-                    note_data = note_response.json()
-                    body = note_data.get('properties', {}).get('hs_note_body', '')
-                    # Truncate to 200 chars
-                    if len(body) > 200:
-                        body = body[:200] + '...'
-                    return body
-
-        return None
-    except Exception as e:
-        print(f"  Error fetching notes: {e}", file=sys.stderr)
-        return None
+    """Get the latest note for a company."""
+    return _get_latest_note(company_id)
 
 
 def get_hubspot_context(attendees, owner_email):
@@ -696,7 +554,7 @@ def get_next_meeting(email):
             if meeting_start > now:
                 event['_parsed_start'] = meeting_start
                 future_events.append(event)
-        except:
+        except Exception:
             continue
 
     if not future_events:

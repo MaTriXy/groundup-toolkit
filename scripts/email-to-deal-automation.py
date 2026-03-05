@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import requests
 import glob
+import fcntl
 from datetime import datetime, timedelta
 import re
 
@@ -14,7 +15,7 @@ import re
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.expanduser('~/.openclaw'))
 from lib.config import config
-from lib.safe_url import is_safe_url, safe_request
+from lib.safe_url import is_safe_url
 
 ANTHROPIC_API_KEY = config.anthropic_api_key
 
@@ -1392,7 +1393,7 @@ def process_email(thread):
                 # Clean up temp file
                 try:
                     os.remove(pdf_path)
-                except:
+                except Exception:
                     pass
             else:
                 print(f'  ✗ Could not download attachment')
@@ -1425,7 +1426,7 @@ def process_email(thread):
                 payload = {'properties': {'description': company_data['description']}}
                 requests.patch(url, headers=headers, json=payload, timeout=10)
                 print(f'Updated company description with deck analysis')
-            except:
+            except Exception:
                 pass
     else:
         company_id = create_hubspot_company(company_data)
@@ -1474,4 +1475,13 @@ def main():
     print(f'\nProcessed: {processed}/{len(threads)}')
 
 if __name__ == '__main__':
+    # File lock to prevent concurrent runs (10-min cron can overlap with slow deck processing)
+    _lock_dir = os.path.join(os.environ.get('TOOLKIT_ROOT', os.path.join(os.path.dirname(__file__), '..')), 'data')
+    os.makedirs(_lock_dir, exist_ok=True)
+    _lock_file = open(os.path.join(_lock_dir, 'email-to-deal.lock'), 'w')
+    try:
+        fcntl.flock(_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        print('Another instance is already running, exiting.')
+        sys.exit(0)
     main()

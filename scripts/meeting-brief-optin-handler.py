@@ -5,12 +5,11 @@ Team members can send "opt in" or "opt out" to control meeting briefs
 """
 import os
 import sys
-import json
 import shlex
 import subprocess
 import tempfile
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from lib.config import config
@@ -81,7 +80,7 @@ def set_opt_in(email, opted_in):
         with os.fdopen(fd, 'w') as f:
             f.write(new_content)
         os.replace(tmp_path, SCRIPT_PATH)
-    except:
+    except Exception:
         os.unlink(tmp_path)
         raise
 
@@ -258,58 +257,6 @@ Current status: {"✅ Receiving briefs" if current_status else "❌ Not receivin
         mark_email_processed(thread_id)
 
     return processed
-
-def create_opt_in_instructions():
-    """Create instructions for team members"""
-    instructions = f"""
-# How to Opt In/Out of Meeting Briefs
-
-## Via Email (Easiest)
-
-Send an email to **{GOG_ACCOUNT}**:
-
-**To opt in:**
-- Subject: "Opt in to meeting briefs"
-- Body: (anything)
-
-**To opt out:**
-- Subject: "Opt out of meeting briefs"
-- Body: (anything)
-
-You'll receive a confirmation email within a few minutes.
-
-## Via WhatsApp (Coming Soon)
-
-Send a message to the OpenClaw WhatsApp number:
-- "opt in to meeting briefs"
-- "opt out of meeting briefs"
-
-## What You Get When Opted In
-
-Smart meeting prep sent 10 minutes before each meeting:
-- Meeting attendees and contact info
-- HubSpot deal context and stage
-- Smart questions based on deal stage
-- Recent CRM notes
-- Meeting links and location
-
-## Requirements
-
-Make sure your Google Calendar is shared with **{GOG_ACCOUNT}**:
-1. Go to calendar.google.com
-2. Settings → Your calendar
-3. Share with specific people → Add {GOG_ACCOUNT}
-4. Permission: "See all event details"
-
-## Privacy
-
-- Your calendar data is only used for meeting prep
-- Phone numbers are stored securely
-- You can opt out anytime
-- No data is shared with third parties
-"""
-
-    return instructions
 
 def main():
     print("="*70)

@@ -6,7 +6,7 @@ Auto-joins meetings the assistant is invited to, records them, and extracts acti
 
 **V1.5 Features:**
 - Auto-joins meetings the assistant is invited to
-- **Now uses Camofox** for better fingerprinting resistance
+- **Now uses Camoufox** for better fingerprinting resistance
 - Records with Google Meet native recording
 - Extracts to-dos and meeting summary
 - Emails summary to configured alert recipient after meeting

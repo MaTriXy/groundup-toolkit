@@ -1,8 +1,4 @@
 {
-  "dependencies": {
-    "puppeteer": "^24.37.2",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "puppeteer-extra-plugin-user-preferences": "^2.4.1"
-  }
+  "private": true,
+  "description": "Meeting bot - no npm dependencies (uses Playwright via Camoufox or CDP)"
 }

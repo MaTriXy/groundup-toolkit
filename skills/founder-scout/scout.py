@@ -37,11 +37,11 @@ from datetime import datetime, timedelta
 # Load shared config
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from lib.config import config
+from lib.claude import call_claude
+from lib.whatsapp import send_whatsapp
+from lib.email import send_email
 
 # --- Configuration ---
-
-ANTHROPIC_API_KEY = config.anthropic_api_key
-GOG_ACCOUNT = config.assistant_email
 LINKEDIN_BROWSER_PROFILE = "linkedin"
 
 # LinkedIn rate limits
@@ -325,41 +325,6 @@ class ScoutDatabase:
             'total_signals': total_signals, 'total_scans': total_scans,
         }
 
-
-# --- Claude API ---
-
-def call_claude(prompt, system_prompt="", model="claude-sonnet-4-20250514", max_tokens=2048):
-    """Call Claude API."""
-    payload = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    if system_prompt:
-        payload["system"] = system_prompt
-
-    for attempt in range(3):
-        response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
-            },
-            json=payload,
-            timeout=60
-        )
-        if response.status_code == 200:
-            return response.json()["content"][0]["text"]
-        if response.status_code == 429:
-            wait = 15 * (attempt + 1)
-            print(f"  Claude rate limited, waiting {wait}s...", file=sys.stderr)
-            time.sleep(wait)
-            continue
-        print(f"  Claude API error: {response.status_code} {response.text[:200]}", file=sys.stderr)
-        return None
-    print(f"  Claude API: exhausted retries", file=sys.stderr)
-    return None
 
 
 # --- LinkedIn Browser ---
@@ -668,63 +633,7 @@ NOT RELEVANT (false) means:
     return None
 
 
-# --- Sending ---
-
-def send_email(to_email, subject, body):
-    """Send email using gog CLI with body file."""
-    try:
-        fd, body_file = tempfile.mkstemp(suffix='.txt', prefix='scout-email-')
-        with os.fdopen(fd, 'w') as f:
-            f.write(body)
-
-        cmd = [
-            'gog', 'gmail', 'send',
-            '--to', to_email,
-            '--subject', subject,
-            '--body-file', body_file,
-            '--account', GOG_ACCOUNT,
-            '--force', '--no-input'
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        try:
-            os.unlink(body_file)
-        except OSError:
-            pass
-
-        if result.returncode == 0:
-            print(f"  Email sent to {to_email}")
-            return True
-        else:
-            print(f"  Email failed for {to_email}: {result.stderr.strip()[:200]}", file=sys.stderr)
-            return False
-    except Exception as e:
-        print(f"  Email exception for {to_email}: {e}", file=sys.stderr)
-        return False
-
-
-def send_whatsapp(phone, message, max_retries=3, retry_delay=3):
-    """Send WhatsApp message via OpenClaw with retry."""
-    for attempt in range(1, max_retries + 1):
-        try:
-            cmd = [
-                'openclaw', 'message', 'send',
-                '--channel', 'whatsapp',
-                '--target', phone,
-                '--message', message
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            if result.returncode == 0:
-                print(f"  WhatsApp sent to {phone}" + (f" (attempt {attempt})" if attempt > 1 else ""))
-                return True
-            else:
-                print(f"  Attempt {attempt}/{max_retries} failed: {result.stderr.strip()[:100]}", file=sys.stderr)
-                if attempt < max_retries:
-                    time.sleep(retry_delay)
-        except Exception as e:
-            print(f"  Attempt {attempt}/{max_retries} exception: {e}", file=sys.stderr)
-            if attempt < max_retries:
-                time.sleep(retry_delay)
-    return False
+# send_email and send_whatsapp imported from lib/
 
 
 # --- Formatting ---

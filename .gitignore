@@ -25,7 +25,8 @@ skills/content-writer/profiles/*/
 !skills/content-writer/profiles/example/
 
 # Data & state
-data/
+data/*
+!data/README.md
 *.db
 *.sqlite
 *.log

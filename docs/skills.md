@@ -135,7 +135,7 @@ Hebrew messages work — output will be in Hebrew with English tech terms.
 
 **Per-member profiles**: `profiles/<name>/` contains `voice.json`, `audience.json`, and `brand.json` for each team member. See `profiles/example/` for templates.
 
-**Requires**: `ANTHROPIC_API_KEY`, `BRAVE_API_KEY` (for research)
+**Requires**: `ANTHROPIC_API_KEY`, `BRAVE_SEARCH_API_KEY` (for research)
 
 ---
 

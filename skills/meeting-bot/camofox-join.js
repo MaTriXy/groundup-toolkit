@@ -12,8 +12,6 @@ const { execSync } = require("child_process");
 
 // Path to your server's Camoufox installation — adjust if yours is installed elsewhere
 const CAMOFOX_DIR = process.env.CAMOFOX_DIR || path.join(os.homedir(), ".openclaw/workspace/camofox-browser");
-const { launchOptions } = require(CAMOFOX_DIR + "/node_modules/camoufox-js");
-const { firefox } = require(CAMOFOX_DIR + "/node_modules/playwright-core");
 const { config, TOOLKIT_ROOT } = require("../../lib/config");
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));

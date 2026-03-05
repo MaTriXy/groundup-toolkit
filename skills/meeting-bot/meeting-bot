@@ -228,9 +228,6 @@ Transcript:
 
 def send_meeting_summary_email(notes, meeting_name, meeting_date):
     """Email meeting summary to the alert/admin email"""
-    import shlex
-    import tempfile
-
     admin_email = config.alert_email
     admin_name = config.get_member_by_email(admin_email)
     admin_name = admin_name['name'].split()[0] if admin_name else 'Team'

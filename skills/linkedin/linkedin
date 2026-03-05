@@ -31,7 +31,7 @@ shift
 case "$ACTION" in
     search)
         QUERY="${*:?Usage: linkedin search <query>}"
-        ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$QUERY'))")
+        ENCODED=$(python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$QUERY")
         openclaw browser navigate --browser-profile "$PROFILE" "https://www.linkedin.com/search/results/people/?keywords=${ENCODED}"
         sleep 2
         openclaw browser snapshot --browser-profile "$PROFILE" --efficient
