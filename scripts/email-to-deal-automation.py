@@ -65,7 +65,8 @@ def check_recent_emails():
         detail = gws_gmail_thread_get(thread_id)
         if not detail or 'messages' not in detail:
             continue
-        first_msg = detail['messages'][0]
+        # Use last message in thread (the forwarded email, not the original)
+        first_msg = detail['messages'][-1]
         headers = first_msg.get('payload', {}).get('headers', [])
         from_val = ''
         subject_val = ''
@@ -106,7 +107,10 @@ def _is_own_firm_name(name):
 
 def extract_company_info(thread):
     subject = thread.get('subject', '')
-    subject_clean = re.sub(r'^(re:|fwd:)\s*', '', subject, flags=re.IGNORECASE).strip()
+    # Strip all Fwd:/Re:/Fw: prefixes (loop handles "Fwd: Re: Re: ...")
+    subject_clean = subject
+    while re.match(r'^(re|fwd|fw):\s*', subject_clean, re.IGNORECASE):
+        subject_clean = re.sub(r'^(re|fwd|fw):\s*', '', subject_clean, flags=re.IGNORECASE).strip()
     # Remove LP mentions from company name
     subject_clean = re.sub(r'\bLP\b|\bL\.P\.\b|limited partner', '', subject_clean, flags=re.IGNORECASE).strip()
 
@@ -147,7 +151,58 @@ def extract_company_info(thread):
     if _is_own_firm_name(company_name):
         company_name = ''
 
+    # Strip trailing punctuation and dangling separators
+    company_name = re.sub(r'\s*[-–—:+,]\s*$', '', company_name).strip()
+
+    # Fallback: extract company from recipient email domains in snippet
+    snippet = thread.get('snippet', '')
+    if not company_name or len(company_name) < 3 or '?' in company_name:
+        # Look for non-team email domains in snippet (e.g. amir@sayfin.ai → Sayfin)
+        all_emails = re.findall(r'[\w.+-]+@([\w-]+)\.\w+', snippet)
+        team_domain = config.team_domain.split('.')[0].lower()
+        external_domains = [d for d in all_emails if d.lower() != team_domain and d.lower() not in ('gmail', 'yahoo', 'hotmail', 'outlook', 'google')]
+        if external_domains:
+            company_name = external_domains[0].capitalize()
+
+    # Fallback: ask Claude to extract company name from email content
+    if (not company_name or len(company_name) < 3 or '?' in company_name) and ANTHROPIC_API_KEY:
+        company_name = _extract_company_with_claude(subject, snippet) or company_name
+
     return {'name': company_name, 'description': f'Created from email: {subject}'}
+
+
+def _extract_company_with_claude(subject, snippet):
+    """Use Claude to extract company name from email subject + snippet."""
+    try:
+        import requests as req
+        resp = req.post(
+            'https://api.anthropic.com/v1/messages',
+            headers={
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json',
+            },
+            json={
+                'model': 'claude-haiku-4-5-20251001',
+                'max_tokens': 50,
+                'messages': [{'role': 'user', 'content': (
+                    f'Extract the startup/company name from this email. '
+                    f'Return ONLY the company name, nothing else. '
+                    f'If you cannot determine it, return "Unknown".\n\n'
+                    f'Subject: {subject}\n'
+                    f'Preview: {snippet[:500]}'
+                )}],
+            },
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            name = resp.json()['content'][0]['text'].strip().strip('"\'')
+            if name and name.lower() != 'unknown' and len(name) < 100:
+                print(f'  Claude extracted company name: {name}')
+                return name
+    except Exception:
+        pass
+    return None
 
 def create_hubspot_company(company_data):
     if not MATON_API_KEY:
@@ -1231,7 +1286,22 @@ def process_email(thread):
     sender_match = re.search(r'<(.+?)>', from_email)
     sender_email = sender_match.group(1) if sender_match else from_email
     if sender_email not in TEAM_MEMBERS:
-        return False
+        # Fallback: scan all messages in thread for a team member sender
+        detail = gws_gmail_thread_get(thread_id)
+        found_team_sender = False
+        if detail and 'messages' in detail:
+            for msg in detail['messages']:
+                hdrs = {h['name'].lower(): h['value'] for h in msg.get('payload', {}).get('headers', [])}
+                msg_from = hdrs.get('from', '')
+                match = re.search(r'<(.+?)>', msg_from)
+                email_addr = match.group(1) if match else msg_from
+                if email_addr in TEAM_MEMBERS:
+                    sender_email = email_addr
+                    found_team_sender = True
+                    break
+        if not found_team_sender:
+            print(f'\n  Skipped: sender [{sender_email}] not in team (subject: {subject})')
+            return False
 
     print(f'\nProcessing: {subject}')
 
