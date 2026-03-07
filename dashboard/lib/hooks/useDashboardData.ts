@@ -6,6 +6,12 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json()
 }
 
+function fetchJsonDelayed<T>(url: string, delayMs: number): () => Promise<T> {
+  return () => new Promise((resolve) => {
+    setTimeout(() => resolve(fetchJson<T>(url)), delayMs)
+  })
+}
+
 export function usePipeline() {
   return useQuery({
     queryKey: ["pipeline"],
@@ -37,10 +43,10 @@ export function useStats() {
 export function useDealFlow() {
   return useQuery({
     queryKey: ["deal-flow"],
-    queryFn: () => fetchJson<{
+    queryFn: fetchJsonDelayed<{
       weeks: Array<{ week: string; label: string; count: number }>
       totalDeals: number
-    }>("/api/deal-flow"),
+    }>("/api/deal-flow", 2000),
     refetchInterval: 300_000,
     staleTime: 120_000,
   })
@@ -49,11 +55,11 @@ export function useDealFlow() {
 export function useTeamActivity() {
   return useQuery({
     queryKey: ["team-activity"],
-    queryFn: () => fetchJson<{
+    queryFn: fetchJsonDelayed<{
       heatmap: Array<{ member: string; weeks: number[] }>
       weekLabels: string[]
       totalDeals: number
-    }>("/api/team-activity"),
+    }>("/api/team-activity", 2000),
     refetchInterval: 300_000,
     staleTime: 120_000,
   })
@@ -81,10 +87,10 @@ export function useSignals() {
 export function useStageMovements() {
   return useQuery({
     queryKey: ["stage-movements"],
-    queryFn: () => fetchJson<{
+    queryFn: fetchJsonDelayed<{
       movements: Array<{ id: string; name: string; stage: string; owner: string | null; lastModified: string | null; amount: string | null }>
       staleDeals: Array<{ id: string; name: string; stage: string; owner: string | null; lastModified: string | null; daysStale: number }>
-    }>("/api/stage-movements"),
+    }>("/api/stage-movements", 4000),
     refetchInterval: 120_000,
     staleTime: 60_000,
   })
@@ -104,10 +110,10 @@ export function useMeetings() {
 export function useDealSources() {
   return useQuery({
     queryKey: ["deal-sources"],
-    queryFn: () => fetchJson<{
+    queryFn: fetchJsonDelayed<{
       sources: Array<{ name: string; count: number }>
       total: number
-    }>("/api/deal-sources"),
+    }>("/api/deal-sources", 6000),
     refetchInterval: 300_000,
     staleTime: 120_000,
   })
@@ -130,12 +136,12 @@ export function useResponseTime() {
 export function useSignalConversion() {
   return useQuery({
     queryKey: ["signal-conversion"],
-    queryFn: () => fetchJson<{
+    queryFn: fetchJsonDelayed<{
       signalsDetected: number
       dealsCreated: number
       conversionRate: number
       totalDeals: number
-    }>("/api/signal-conversion"),
+    }>("/api/signal-conversion", 8000),
     refetchInterval: 300_000,
     staleTime: 120_000,
   })

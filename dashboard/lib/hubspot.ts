@@ -33,6 +33,24 @@ export async function hubspotSearch(
     signal: AbortSignal.timeout(15000),
   })
 
+  if (res.status === 429) {
+    // Rate limited — wait and retry once
+    await new Promise((r) => setTimeout(r, 2000))
+    const retry = await fetch(`${MATON_BASE}/crm/v3/objects/${objectType}/search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${MATON_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!retry.ok) {
+      throw new Error(`HubSpot search ${objectType} failed: ${retry.status}`)
+    }
+    return retry.json()
+  }
+
   if (!res.ok) {
     throw new Error(`HubSpot search ${objectType} failed: ${res.status}`)
   }
