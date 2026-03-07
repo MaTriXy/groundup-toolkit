@@ -37,7 +37,6 @@ export function PipelineFunnel() {
   }
 
   const stages = data?.stages || []
-  // Active stages = not passed/not pursuing
   const activeStages = stages.filter((s) => s.id !== "closedlost")
   const maxCount = Math.max(...activeStages.map((s) => s.count), 1)
 
@@ -56,33 +55,33 @@ export function PipelineFunnel() {
         <span className="text-xs text-muted-foreground">{data?.totalDeals || 0} total deals</span>
       </div>
 
-      <div className="flex gap-2 items-end">
+      <div className="space-y-1.5">
         {activeStages.map((stage) => {
-          const height = Math.max(20, (stage.count / maxCount) * 80)
+          const width = Math.max(8, (stage.count / maxCount) * 100)
           const isExpanded = expanded === stage.id
 
           return (
-            <div key={stage.id} className="flex-1 min-w-0">
+            <div key={stage.id}>
               <button
                 onClick={() => setExpanded(isExpanded ? null : stage.id)}
-                className="w-full group"
+                className="w-full group flex items-center gap-3"
               >
-                <div className="text-center mb-2">
-                  <span className="text-lg font-bold">{stage.count}</span>
-                </div>
-                <div
-                  className={cn(
-                    "rounded-lg transition-all duration-300 group-hover:opacity-80",
-                    stageColors[stage.id] || "bg-slate-500"
-                  )}
-                  style={{ height: `${height}px` }}
-                />
-                <div className="text-center mt-2 flex items-center justify-center gap-1">
-                  <span className="text-[10px] text-muted-foreground truncate">{stage.label}</span>
+                <span className="text-xs text-muted-foreground w-28 shrink-0 text-right truncate">
+                  {stage.label}
+                </span>
+                <div className="flex-1 flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "h-6 rounded transition-all duration-300 group-hover:opacity-80",
+                      stageColors[stage.id] || "bg-slate-500"
+                    )}
+                    style={{ width: `${width}%` }}
+                  />
+                  <span className="text-xs font-semibold w-6 shrink-0">{stage.count}</span>
                   {stage.count > 0 && (
                     isExpanded
-                      ? <ChevronUp className="h-2.5 w-2.5 text-muted-foreground" />
-                      : <ChevronDown className="h-2.5 w-2.5 text-muted-foreground" />
+                      ? <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />
+                      : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
                   )}
                 </div>
               </button>
@@ -91,11 +90,12 @@ export function PipelineFunnel() {
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
-                  className="mt-2 space-y-1"
+                  className="ml-[7.75rem] mt-1 mb-1 space-y-0.5"
                 >
                   {stage.deals.map((deal, i) => (
-                    <div key={i} className="text-[10px] text-muted-foreground truncate px-1 py-0.5 rounded bg-muted/50">
+                    <div key={i} className="text-[11px] text-muted-foreground truncate px-2 py-0.5 rounded bg-muted/50">
                       {deal.name}
+                      {deal.owner && <span className="text-muted-foreground/50 ml-2">{deal.owner}</span>}
                     </div>
                   ))}
                 </motion.div>

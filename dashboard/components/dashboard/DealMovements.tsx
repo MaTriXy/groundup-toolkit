@@ -63,7 +63,9 @@ export function DealMovements() {
       </div>
 
       {movements.length === 0 ? (
-        <div className="text-center py-4 text-xs text-muted-foreground">No deal activity this week</div>
+        <div className="text-center py-6 text-xs text-muted-foreground">
+          No deals moved stages this week. Activity appears here when deals advance in the pipeline.
+        </div>
       ) : (
         <div className="space-y-1.5 max-h-48 overflow-y-auto">
           {movements.map((m) => (

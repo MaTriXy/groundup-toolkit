@@ -14,8 +14,15 @@ import { DealSources } from "@/components/dashboard/DealSources"
 import { ResponseTime } from "@/components/dashboard/ResponseTime"
 import { SignalConversion } from "@/components/dashboard/SignalConversion"
 import { ServiceGrid } from "@/components/services/ServiceGrid"
-import { ActivityFeed } from "@/components/dashboard/ActivityFeed"
 import { KeyboardShortcuts } from "@/components/dashboard/KeyboardShortcuts"
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-4 mt-2">
+      {children}
+    </h2>
+  )
+}
 
 export default function DashboardPage() {
   return (
@@ -24,30 +31,40 @@ export default function DashboardPage() {
       <Greeting />
       <StatsBar />
       <QuickActions />
+
+      {/* Pipeline */}
       <PipelineFunnel />
 
+      {/* Analytics */}
+      <SectionHeader>Analytics</SectionHeader>
       <div className="grid gap-6 lg:grid-cols-2 mb-8">
         <DealFlowChart />
         <TeamHeatmap />
       </div>
 
+      {/* Activity & Schedule */}
+      <SectionHeader>Activity & Schedule</SectionHeader>
       <div className="grid gap-6 lg:grid-cols-2 mb-8">
         <DealMovements />
         <MeetingPrep />
       </div>
 
+      {/* Metrics */}
+      <SectionHeader>Metrics</SectionHeader>
       <div className="grid gap-6 lg:grid-cols-3 mb-8">
         <DealSources />
         <ResponseTime />
         <SignalConversion />
       </div>
 
+      {/* Signals */}
       <div className="mb-8">
         <SignalFeed />
       </div>
 
+      {/* Services */}
+      <SectionHeader>Services</SectionHeader>
       <ServiceGrid />
-      <ActivityFeed />
     </AppShell>
   )
 }

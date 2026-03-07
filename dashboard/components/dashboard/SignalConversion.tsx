@@ -42,34 +42,42 @@ export function SignalConversion() {
         <span className="text-xs text-muted-foreground">Last 30 days</span>
       </div>
 
-      <div className="flex items-end gap-6 mb-4">
-        <div>
-          <div className="text-2xl font-bold tracking-tight">{rate}%</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">conversion rate</div>
+      {signals === 0 && deals === 0 ? (
+        <div className="text-center py-4 text-xs text-muted-foreground">
+          No scout signals this month. Founder Scout scans daily at 7 AM.
         </div>
-        <div>
-          <div className="text-lg font-semibold text-muted-foreground">{signals}</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">signals</div>
-        </div>
-        <div>
-          <div className="text-lg font-semibold text-emerald-400">{deals}</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">deals</div>
-        </div>
-      </div>
+      ) : (
+        <>
+          <div className="flex items-end gap-6 mb-4">
+            <div>
+              <div className="text-2xl font-bold tracking-tight">{rate}%</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">conversion rate</div>
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-muted-foreground">{signals}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">signals</div>
+            </div>
+            <div>
+              <div className="text-lg font-semibold text-emerald-400">{deals}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">deals</div>
+            </div>
+          </div>
 
-      {/* Funnel visualization */}
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-2">
-          <div className="h-3 rounded-full bg-violet-500/30" style={{ width: `${signalWidth}%` }}>
-            <div className="h-full rounded-full bg-violet-500" style={{ width: "100%" }} />
+          {/* Funnel visualization */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <div className="h-3 rounded-full bg-violet-500/30" style={{ width: `${signalWidth}%` }}>
+                <div className="h-full rounded-full bg-violet-500" style={{ width: "100%" }} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-3 rounded-full bg-emerald-500/30" style={{ width: `${dealWidth}%` }}>
+                <div className="h-full rounded-full bg-emerald-500" style={{ width: "100%" }} />
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="h-3 rounded-full bg-emerald-500/30" style={{ width: `${dealWidth}%` }}>
-            <div className="h-full rounded-full bg-emerald-500" style={{ width: "100%" }} />
-          </div>
-        </div>
-      </div>
+        </>
+      )}
     </motion.div>
   )
 }

@@ -7,7 +7,7 @@ import { useStats } from "@/lib/hooks/useDashboardData"
 export function StatsBar() {
   const { data, isLoading } = useStats()
 
-  const stats = [
+  const heroStats = [
     {
       label: "Deals This Week",
       value: isLoading ? "-" : (data?.dealsThisWeek ?? 0).toString(),
@@ -22,6 +22,9 @@ export function StatsBar() {
       color: "text-emerald-500",
       bg: "bg-emerald-500/10",
     },
+  ]
+
+  const secondaryStats = [
     {
       label: "Decks Analyzed",
       value: isLoading ? "-" : (data?.decksAnalyzed ?? 0).toString(),
@@ -53,24 +56,47 @@ export function StatsBar() {
   ]
 
   return (
-    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 mb-8">
-      {stats.map((stat, i) => (
-        <motion.div
-          key={stat.label}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: i * 0.04 }}
-          className="flex items-center gap-3 rounded-xl border border-border bg-card/50 backdrop-blur-sm p-3"
-        >
-          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${stat.bg}`}>
-            <stat.icon className={`h-4 w-4 ${stat.color}`} />
-          </div>
-          <div>
-            <p className="text-[10px] text-muted-foreground leading-tight">{stat.label}</p>
-            <p className="text-lg font-semibold tracking-tight">{stat.value}</p>
-          </div>
-        </motion.div>
-      ))}
+    <div className="mb-8 space-y-3">
+      {/* Hero metrics */}
+      <div className="grid gap-3 grid-cols-2">
+        {heroStats.map((stat, i) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: i * 0.04 }}
+            className="flex items-center gap-4 rounded-xl border border-border bg-card/50 backdrop-blur-sm p-4"
+          >
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${stat.bg}`}>
+              <stat.icon className={`h-5 w-5 ${stat.color}`} />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground leading-tight">{stat.label}</p>
+              <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+      {/* Secondary metrics */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+        {secondaryStats.map((stat, i) => (
+          <motion.div
+            key={stat.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.08 + i * 0.04 }}
+            className="flex items-center gap-3 rounded-xl border border-border bg-card/50 backdrop-blur-sm p-3"
+          >
+            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${stat.bg}`}>
+              <stat.icon className={`h-3.5 w-3.5 ${stat.color}`} />
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground leading-tight">{stat.label}</p>
+              <p className="text-sm font-semibold tracking-tight">{stat.value}</p>
+            </div>
+          </motion.div>
+        ))}
+      </div>
     </div>
   )
 }

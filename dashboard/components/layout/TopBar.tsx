@@ -7,16 +7,24 @@ import { useTheme } from "@/lib/hooks/useTheme"
 import { useServicesStore } from "@/lib/store/servicesStore"
 import { NotificationPanel } from "@/components/notifications/NotificationPanel"
 import { signOut } from "next-auth/react"
+import { usePathname } from "next/navigation"
+
+const pageTitles: Record<string, string> = {
+  "/": "Dashboard",
+  "/settings": "Settings",
+}
 
 export function TopBar() {
   const { theme, toggleTheme } = useTheme()
   const setSearchQuery = useServicesStore((s) => s.setSearchQuery)
   const searchQuery = useServicesStore((s) => s.searchQuery)
+  const pathname = usePathname()
+  const title = pageTitles[pathname] || "Dashboard"
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 backdrop-blur-xl px-6">
       <div className="flex items-center gap-2">
-        <h1 className="text-lg font-semibold tracking-tight">Dashboard</h1>
+        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
       </div>
 
       <div className="flex items-center gap-3">
@@ -24,7 +32,7 @@ export function TopBar() {
         <div className="relative hidden sm:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search services..."
+            placeholder="Filter services..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-64 pl-9 h-9 bg-muted/50 border-none text-sm"

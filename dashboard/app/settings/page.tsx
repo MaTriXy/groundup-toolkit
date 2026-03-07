@@ -5,7 +5,7 @@ import { motion } from "framer-motion"
 import { Settings, Bell, Moon, Clock, User } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { useSession } from "next-auth/react"
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
 
 interface SettingsSection {
@@ -38,14 +38,55 @@ function SettingRow({ label, description, children }: { label: string; descripti
   )
 }
 
+const STORAGE_KEY = "christina-settings"
+
+interface SettingsState {
+  notifyDeals: boolean
+  notifyMeetings: boolean
+  notifyErrors: boolean
+  notifySignals: boolean
+  quietHours: boolean
+  darkMode: boolean
+}
+
+const defaults: SettingsState = {
+  notifyDeals: true,
+  notifyMeetings: true,
+  notifyErrors: true,
+  notifySignals: true,
+  quietHours: false,
+  darkMode: true,
+}
+
+function loadSettings(): SettingsState {
+  if (typeof window === "undefined") return defaults
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    return stored ? { ...defaults, ...JSON.parse(stored) } : defaults
+  } catch {
+    return defaults
+  }
+}
+
 export default function SettingsPage() {
   const { data: session } = useSession()
-  const [notifyDeals, setNotifyDeals] = useState(true)
-  const [notifyMeetings, setNotifyMeetings] = useState(true)
-  const [notifyErrors, setNotifyErrors] = useState(true)
-  const [notifySignals, setNotifySignals] = useState(true)
-  const [quietHours, setQuietHours] = useState(false)
-  const [darkMode, setDarkMode] = useState(true)
+  const [settings, setSettings] = useState<SettingsState>(defaults)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    setSettings(loadSettings())
+    setLoaded(true)
+  }, [])
+
+  const update = useCallback((key: keyof SettingsState, value: boolean) => {
+    setSettings((prev) => {
+      const next = { ...prev, [key]: value }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  if (!loaded) return null
 
   return (
     <AppShell>
@@ -76,35 +117,35 @@ export default function SettingsPage() {
           {/* Notifications */}
           <Section title="WhatsApp Notifications" icon={Bell}>
             <SettingRow label="New Deals" description="Get notified when a new deal is created from email">
-              <Switch checked={notifyDeals} onCheckedChange={setNotifyDeals} />
+              <Switch checked={settings.notifyDeals} onCheckedChange={(v) => update("notifyDeals", v)} />
             </SettingRow>
             <SettingRow label="Meeting Briefs" description="Receive meeting prep briefs before calls">
-              <Switch checked={notifyMeetings} onCheckedChange={setNotifyMeetings} />
+              <Switch checked={settings.notifyMeetings} onCheckedChange={(v) => update("notifyMeetings", v)} />
             </SettingRow>
             <SettingRow label="Service Errors" description="Alert when a service fails or has errors">
-              <Switch checked={notifyErrors} onCheckedChange={setNotifyErrors} />
+              <Switch checked={settings.notifyErrors} onCheckedChange={(v) => update("notifyErrors", v)} />
             </SettingRow>
             <SettingRow label="Founder Signals" description="Get notified about high-signal founder detections">
-              <Switch checked={notifySignals} onCheckedChange={setNotifySignals} />
+              <Switch checked={settings.notifySignals} onCheckedChange={(v) => update("notifySignals", v)} />
             </SettingRow>
           </Section>
 
           {/* Schedule */}
           <Section title="Quiet Hours" icon={Clock}>
             <SettingRow label="Enable Quiet Hours" description="Suppress non-urgent notifications between 10 PM and 7 AM">
-              <Switch checked={quietHours} onCheckedChange={setQuietHours} />
+              <Switch checked={settings.quietHours} onCheckedChange={(v) => update("quietHours", v)} />
             </SettingRow>
           </Section>
 
           {/* Appearance */}
           <Section title="Appearance" icon={Moon}>
             <SettingRow label="Dark Mode" description="Use dark theme for the dashboard">
-              <Switch checked={darkMode} onCheckedChange={setDarkMode} />
+              <Switch checked={settings.darkMode} onCheckedChange={(v) => update("darkMode", v)} />
             </SettingRow>
           </Section>
 
           <p className="text-[10px] text-muted-foreground text-center pb-8">
-            Settings are stored locally. WhatsApp notification preferences sync with Christina on next interaction.
+            Settings are saved to your browser. WhatsApp notification preferences sync with Christina on next interaction.
           </p>
         </div>
       </motion.div>

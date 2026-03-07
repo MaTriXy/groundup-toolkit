@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Timer, TrendingDown, TrendingUp } from "lucide-react"
+import { Timer } from "lucide-react"
 import { useResponseTime } from "@/lib/hooks/useDashboardData"
 
 export function ResponseTime() {
@@ -47,39 +47,45 @@ export function ResponseTime() {
         <span className="text-xs text-muted-foreground">Last 30 days</span>
       </div>
 
-      <div className="flex items-end gap-6">
-        <div>
-          <div className="text-2xl font-bold tracking-tight">
-            {avg > 0 ? `${avg}m` : "--"}
+      {total === 0 ? (
+        <div className="text-center py-4 text-xs text-muted-foreground">
+          No emails processed recently. The automation runs every 2 hours.
+        </div>
+      ) : (
+        <div className="flex items-end gap-6">
+          <div>
+            <div className="text-2xl font-bold tracking-tight">
+              {avg > 0 ? `${avg}m` : "--"}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">avg processing</div>
           </div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">avg processing</div>
-        </div>
-        <div>
-          <div className="text-lg font-semibold text-muted-foreground">
-            {median > 0 ? `${median}m` : "--"}
+          <div>
+            <div className="text-lg font-semibold text-muted-foreground">
+              {median > 0 ? `${median}m` : "--"}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">median</div>
           </div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">median</div>
-        </div>
-        <div>
-          <div className="text-lg font-semibold text-muted-foreground">{total}</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">processed</div>
-        </div>
+          <div>
+            <div className="text-lg font-semibold text-muted-foreground">{total}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">processed</div>
+          </div>
 
-        {/* Mini sparkline */}
-        {trend.length > 1 && (
-          <div className="ml-auto">
-            <svg width="80" height="28" className="overflow-visible">
-              <polyline
-                points={sparkPoints}
-                fill="none"
-                stroke="#818cf8"
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-        )}
-      </div>
+          {/* Mini sparkline */}
+          {trend.length > 1 && (
+            <div className="ml-auto">
+              <svg width="80" height="28" className="overflow-visible">
+                <polyline
+                  points={sparkPoints}
+                  fill="none"
+                  stroke="#818cf8"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+          )}
+        </div>
+      )}
     </motion.div>
   )
 }

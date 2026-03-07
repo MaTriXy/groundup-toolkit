@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useChatStore } from "@/lib/store/chatStore"
 import { useSession } from "next-auth/react"
+import { usePathname, useRouter } from "next/navigation"
 import Image from "next/image"
 
 const navItems = [
@@ -25,6 +26,8 @@ export function Sidebar({
 }) {
   const openChat = useChatStore((s) => s.openChat)
   const { data: session } = useSession()
+  const pathname = usePathname()
+  const router = useRouter()
 
   const userName = session?.user?.name?.split(" ")[0] ?? "User"
   const userInitials = session?.user?.name
@@ -59,17 +62,23 @@ export function Sidebar({
       {/* Nav items */}
       <nav className="flex flex-1 flex-col gap-1 px-2">
         {navItems.map((item) => {
+          const isChat = item.label === "Chat"
+          const isActive = !isChat && pathname === item.href
+
           const content = (
             <Button
               key={item.label}
               variant="ghost"
               onClick={() => {
-                if (item.label === "Chat") openChat()
-                else if (item.href && item.href !== "#chat") window.location.href = item.href
+                if (isChat) openChat()
+                else router.push(item.href)
               }}
               className={cn(
-                "w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-accent",
-                collapsed && "justify-center px-0"
+                "w-full justify-start gap-3 hover:text-foreground hover:bg-accent",
+                collapsed && "justify-center px-0",
+                isActive
+                  ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                  : "text-muted-foreground"
               )}
             >
               <item.icon className="h-4 w-4 shrink-0" />

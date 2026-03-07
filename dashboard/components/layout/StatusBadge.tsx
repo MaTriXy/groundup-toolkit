@@ -21,8 +21,9 @@ export function StatusBadge({
     <div className="flex items-center gap-1.5">
       <div
         className={cn(
-          "rounded-full animate-pulse",
+          "rounded-full",
           config.color,
+          status === "degraded" && "animate-pulse",
           size === "sm" ? "h-2 w-2" : "h-2.5 w-2.5"
         )}
       />
@@ -43,7 +44,7 @@ export function OnlineDot({ online = true }: { online?: boolean }) {
     <div
       className={cn(
         "h-2.5 w-2.5 rounded-full",
-        online ? "bg-green-500 animate-pulse" : "bg-gray-500"
+        online ? "bg-green-500" : "bg-gray-500"
       )}
     />
   )

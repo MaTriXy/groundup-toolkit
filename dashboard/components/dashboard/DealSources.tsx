@@ -59,6 +59,12 @@ export function DealSources() {
         </div>
       )}
 
+      {total === 0 && (
+        <div className="text-center py-4 text-xs text-muted-foreground">
+          No deals in the last 90 days.
+        </div>
+      )}
+
       {/* Legend */}
       <div className="space-y-1.5">
         {sources.map((s) => (
