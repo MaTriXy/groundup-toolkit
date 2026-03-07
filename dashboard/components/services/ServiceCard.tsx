@@ -27,6 +27,24 @@ interface HealthInfo {
   lastRun: string | null
   status: "healthy" | "warning" | "error" | "unknown"
   recentErrors: number
+  dailyActivity?: number[]
+}
+
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  const max = Math.max(...data, 1)
+  const w = 56
+  const h = 16
+  const points = data.map((v, i) => {
+    const x = (i / Math.max(data.length - 1, 1)) * w
+    const y = h - (v / max) * (h - 2) - 1
+    return `${x},${y}`
+  }).join(" ")
+
+  return (
+    <svg width={w} height={h} className="overflow-visible">
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
 }
 
 const healthColors: Record<string, string> = {
@@ -128,6 +146,12 @@ export function ServiceCard({
             </>
           )}
         </div>
+        {health?.dailyActivity && health.dailyActivity.some((v) => v > 0) && (
+          <Sparkline
+            data={health.dailyActivity}
+            color={health.status === "error" ? "#ef4444" : health.status === "warning" ? "#f59e0b" : "#22c55e"}
+          />
+        )}
       </div>
 
       {/* Hover actions */}

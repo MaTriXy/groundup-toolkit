@@ -13,6 +13,7 @@ interface ServiceHealth {
   lastRun: string | null
   status: "healthy" | "warning" | "error" | "unknown"
   recentErrors: number
+  dailyActivity: number[]
 }
 
 const SERVICE_LOG_MAP: Record<string, { path: string; successPattern: RegExp; errorPattern: RegExp }> = {
@@ -55,12 +56,13 @@ const SERVICE_LOG_MAP: Record<string, { path: string; successPattern: RegExp; er
 
 function getServiceHealth(serviceId: string): ServiceHealth {
   const config = SERVICE_LOG_MAP[serviceId]
+  const emptyDaily = Array(7).fill(0)
   if (!config) {
-    return { serviceId, lastSuccess: null, lastError: null, lastRun: null, status: "unknown", recentErrors: 0 }
+    return { serviceId, lastSuccess: null, lastError: null, lastRun: null, status: "unknown", recentErrors: 0, dailyActivity: emptyDaily }
   }
 
   try {
-    const lines = execSync(`tail -n 200 "${config.path}" 2>/dev/null || true`, {
+    const lines = execSync(`tail -n 500 "${config.path}" 2>/dev/null || true`, {
       encoding: "utf-8",
       timeout: 3000,
     }).split("\n").filter((l) => l.trim())
@@ -71,12 +73,21 @@ function getServiceHealth(serviceId: string): ServiceHealth {
     const oneDayAgo = new Date()
     oneDayAgo.setDate(oneDayAgo.getDate() - 1)
 
+    // Track daily success counts for last 7 days
+    const dailyActivity = Array(7).fill(0)
+    const now = new Date()
+
     for (const line of lines) {
       const tsMatch = line.match(/\[(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\]]*)\]/)
       const timestamp = tsMatch ? new Date(tsMatch[1].replace(" ", "T") + (tsMatch[1].endsWith("Z") ? "" : "Z")).toISOString() : null
 
       if (config.successPattern.test(line) && timestamp) {
         if (!lastSuccess || timestamp > lastSuccess) lastSuccess = timestamp
+        // Bucket into daily activity
+        const daysAgo = Math.floor((now.getTime() - new Date(timestamp).getTime()) / (1000 * 60 * 60 * 24))
+        if (daysAgo >= 0 && daysAgo < 7) {
+          dailyActivity[6 - daysAgo]++
+        }
       }
       if (config.errorPattern.test(line)) {
         if (timestamp) {
@@ -103,9 +114,9 @@ function getServiceHealth(serviceId: string): ServiceHealth {
     if (recentErrors > 10) status = "error"
     if (lastError && lastSuccess && lastError > lastSuccess) status = "warning"
 
-    return { serviceId, lastSuccess, lastError, lastRun, status, recentErrors }
+    return { serviceId, lastSuccess, lastError, lastRun, status, recentErrors, dailyActivity }
   } catch {
-    return { serviceId, lastSuccess: null, lastError: null, lastRun: null, status: "unknown", recentErrors: 0 }
+    return { serviceId, lastSuccess: null, lastError: null, lastRun: null, status: "unknown", recentErrors: 0, dailyActivity: emptyDaily }
   }
 }
 

@@ -1,0 +1,97 @@
+import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/auth"
+import { rateLimit } from "@/lib/rate-limit"
+import { hubspotSearchAll } from "@/lib/hubspot"
+
+const limiter = rateLimit({ interval: 60_000, limit: 20 })
+
+const STAGE_LABELS: Record<string, string> = {
+  qualifiedtobuy: "Sourcing",
+  appointmentscheduled: "Screening",
+  presentationscheduled: "First Meeting",
+  decisionmakerboughtin: "IC Review",
+  contractsent: "Due Diligence",
+  closedwon: "Term Sheet Offered",
+  "1112320899": "Term Sheet Signed",
+  "1112320900": "Investment Closed",
+  "1008223160": "Portfolio Monitoring",
+  "1138024523": "Keep on Radar",
+  closedlost: "Passed",
+}
+
+const OWNER_NAMES: Record<string, string> = {
+  "76836577": "Navot",
+  "7042119": "Jordan",
+  "80040886": "Cory",
+  "78681903": "David",
+  "80351816": "Allie",
+  "80033101": "Shira",
+}
+
+export async function GET(req: NextRequest) {
+  const { ok } = limiter.check(req)
+  if (!ok) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 })
+
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  try {
+    // Get deals modified in the last 7 days
+    const weekAgo = new Date()
+    weekAgo.setDate(weekAgo.getDate() - 7)
+
+    const deals = await hubspotSearchAll(
+      "deals",
+      [
+        { propertyName: "pipeline", operator: "EQ", value: "default" },
+        { propertyName: "hs_lastmodifieddate", operator: "GTE", value: weekAgo.getTime().toString() },
+      ],
+      ["dealname", "dealstage", "hs_deal_stage_probability", "hubspot_owner_id", "hs_lastmodifieddate", "amount"],
+      [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }]
+    )
+
+    // Also get deals that are stale (>30 days in same stage)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    // Find stale deals: active stages, not modified recently
+    const allActiveDeals = await hubspotSearchAll(
+      "deals",
+      [
+        { propertyName: "pipeline", operator: "EQ", value: "default" },
+        { propertyName: "hs_lastmodifieddate", operator: "LTE", value: thirtyDaysAgo.getTime().toString() },
+      ],
+      ["dealname", "dealstage", "hubspot_owner_id", "hs_lastmodifieddate", "amount"],
+      [{ propertyName: "hs_lastmodifieddate", direction: "ASCENDING" }]
+    )
+
+    // Filter stale deals to active pipeline stages only (not passed/closed)
+    const closedStages = new Set(["closedlost", "1112320900", "1008223160"])
+    const staleDeals = allActiveDeals
+      .filter((d) => !closedStages.has(d.properties.dealstage || ""))
+      .slice(0, 10)
+      .map((d) => ({
+        id: d.id,
+        name: d.properties.dealname || "Unnamed",
+        stage: STAGE_LABELS[d.properties.dealstage || ""] || d.properties.dealstage || "Unknown",
+        owner: OWNER_NAMES[d.properties.hubspot_owner_id || ""] || null,
+        lastModified: d.properties.hs_lastmodifieddate,
+        daysStale: Math.floor((Date.now() - new Date(d.properties.hs_lastmodifieddate || "").getTime()) / (1000 * 60 * 60 * 24)),
+      }))
+
+    // Recent movements: deals modified this week (potential stage changes)
+    const movements = deals.slice(0, 15).map((d) => ({
+      id: d.id,
+      name: d.properties.dealname || "Unnamed",
+      stage: STAGE_LABELS[d.properties.dealstage || ""] || d.properties.dealstage || "Unknown",
+      owner: OWNER_NAMES[d.properties.hubspot_owner_id || ""] || null,
+      lastModified: d.properties.hs_lastmodifieddate,
+      amount: d.properties.amount,
+    }))
+
+    return NextResponse.json({ movements, staleDeals })
+  } catch (e) {
+    console.error("Stage movements API error:", e)
+    return NextResponse.json({ movements: [], staleDeals: [] })
+  }
+}

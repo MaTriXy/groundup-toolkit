@@ -78,6 +78,69 @@ export function useSignals() {
   })
 }
 
+export function useStageMovements() {
+  return useQuery({
+    queryKey: ["stage-movements"],
+    queryFn: () => fetchJson<{
+      movements: Array<{ id: string; name: string; stage: string; owner: string | null; lastModified: string | null; amount: string | null }>
+      staleDeals: Array<{ id: string; name: string; stage: string; owner: string | null; lastModified: string | null; daysStale: number }>
+    }>("/api/stage-movements"),
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  })
+}
+
+export function useMeetings() {
+  return useQuery({
+    queryKey: ["meetings"],
+    queryFn: () => fetchJson<{
+      meetings: Array<{ id: string; title: string; start: string; end: string; attendees: string[]; company: string | null }>
+    }>("/api/meetings"),
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  })
+}
+
+export function useDealSources() {
+  return useQuery({
+    queryKey: ["deal-sources"],
+    queryFn: () => fetchJson<{
+      sources: Array<{ name: string; count: number }>
+      total: number
+    }>("/api/deal-sources"),
+    refetchInterval: 300_000,
+    staleTime: 120_000,
+  })
+}
+
+export function useResponseTime() {
+  return useQuery({
+    queryKey: ["response-time"],
+    queryFn: () => fetchJson<{
+      avgMinutes: number
+      medianMinutes: number
+      totalProcessed: number
+      trend: number[]
+    }>("/api/response-time"),
+    refetchInterval: 300_000,
+    staleTime: 120_000,
+  })
+}
+
+export function useSignalConversion() {
+  return useQuery({
+    queryKey: ["signal-conversion"],
+    queryFn: () => fetchJson<{
+      signalsDetected: number
+      dealsCreated: number
+      conversionRate: number
+      totalDeals: number
+    }>("/api/signal-conversion"),
+    refetchInterval: 300_000,
+    staleTime: 120_000,
+  })
+}
+
 export function useServiceHealth() {
   return useQuery({
     queryKey: ["service-health"],
@@ -89,6 +152,7 @@ export function useServiceHealth() {
         lastRun: string | null
         status: "healthy" | "warning" | "error" | "unknown"
         recentErrors: number
+        dailyActivity: number[]
       }>
     }>("/api/service-health"),
     refetchInterval: 60_000,
