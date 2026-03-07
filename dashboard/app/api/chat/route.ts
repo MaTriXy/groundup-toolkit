@@ -69,11 +69,13 @@ export async function POST(req: NextRequest) {
     return new Response("Bad Request", { status: 400 })
   }
 
-  // Build the message with optional service context
-  const contextPrefix = context && typeof context === "string"
-    ? `[The user is asking about the "${context}" service in the dashboard.]\n\n`
-    : ""
-  const fullMessage = contextPrefix + message
+  // Build the message with user identity and optional service context
+  const userName = session.user.name || session.user.email
+  let prefix = `[Dashboard chat from ${userName} (${session.user.email})]`
+  if (context && typeof context === "string") {
+    prefix += `\n[Asking about the "${context}" service]`
+  }
+  const fullMessage = `${prefix}\n\n${message}`
 
   // Session ID per user — only alphanumeric, hyphens allowed
   const emailSlug = session.user.email.replace(/[^a-zA-Z0-9]/g, "-")
