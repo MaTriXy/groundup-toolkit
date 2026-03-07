@@ -75,8 +75,9 @@ export async function POST(req: NextRequest) {
     : ""
   const fullMessage = contextPrefix + message
 
-  // Session ID per user for conversation persistence
-  const sessionId = `dashboard:${session.user.email}`
+  // Session ID per user — only alphanumeric, hyphens allowed
+  const emailSlug = session.user.email.replace(/[^a-zA-Z0-9]/g, "-")
+  const sessionId = `dashboard-${emailSlug}`
 
   try {
     const responseText = await runAgent(sessionId, fullMessage)
