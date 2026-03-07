@@ -88,7 +88,18 @@ function parseSignals(): Signal[] {
     // Ignore errors
   }
 
-  return signals.sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 20)
+  // Deduplicate by name — keep the most recent entry for each person
+  const byName = new Map<string, Signal>()
+  for (const s of signals) {
+    const existing = byName.get(s.name)
+    if (!existing || s.timestamp > existing.timestamp) {
+      byName.set(s.name, s)
+    }
+  }
+
+  return Array.from(byName.values())
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    .slice(0, 20)
 }
 
 function extractCompany(text: string): string {
