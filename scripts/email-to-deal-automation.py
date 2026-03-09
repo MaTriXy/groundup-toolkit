@@ -59,7 +59,7 @@ def check_recent_emails():
     print(f'[{datetime.now()}] Checking for new emails...')
     team_emails = ' OR '.join([f'from:{email}' for email in TEAM_MEMBERS.keys()])
     query = f'in:inbox -{PROCESSED_LABEL} ({team_emails}) newer_than:3h'
-    return gws_gmail_search(query, max_results=20)
+    return gws_gmail_search(query, max_results=100)
 
 
 def get_email_body(thread_id):
@@ -1040,6 +1040,38 @@ def search_hubspot_company(company_name):
         print(f'  Error searching for company: {e}')
         return None
 
+
+def search_hubspot_deal(deal_name):
+    """Search for existing deal in HubSpot by name (case-insensitive)."""
+    try:
+        url = f'{MATON_BASE_URL}/crm/v3/objects/deals/search'
+        headers = {
+            'Authorization': f'Bearer {MATON_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        # Normalize: strip common suffixes like Ltd, Inc, .ai etc for broader match
+        name_clean = deal_name.strip()
+        payload = {
+            'filterGroups': [{
+                'filters': [{
+                    'propertyName': 'dealname',
+                    'operator': 'EQ',
+                    'value': name_clean
+                }]
+            }],
+            'properties': ['dealname', 'dealstage'],
+            'limit': 1
+        }
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        if response.status_code == 200:
+            results = response.json().get('results', [])
+            if results:
+                return results[0]['id']
+        return None
+    except Exception as e:
+        print(f'  Error searching for deal: {e}')
+        return None
+
 def should_skip_email(subject, body):
     """Check if email should be skipped (not a deal)"""
     # Patterns for system/automated emails to skip
@@ -1413,7 +1445,7 @@ def check_roastmydeck_emails():
     """Check for new RoastMyDeck analysis emails."""
     print(f"[{datetime.now()}] Checking RoastMyDeck emails...")
     query = f"in:inbox -{PROCESSED_LABEL} subject:[RoastMyDeck] newer_than:3h"
-    return gws_gmail_search(query, max_results=20)
+    return gws_gmail_search(query, max_results=100)
 
 
 def parse_roastmydeck_email(body):
@@ -1548,9 +1580,17 @@ def process_roastmydeck_email(thread_id):
 
     deal_description = "\n".join(deal_desc_parts)
 
+    # Check for existing deal (dedup)
+    existing_deal_id = search_hubspot_deal(company_name)
+    if existing_deal_id:
+        print(f"  Skipping: deal '{company_name}' already exists (ID: {existing_deal_id})")
+        mark_email_processed(thread_id)
+        return True
+
     # Map recommendation to pipeline stage
     pipeline_id = DEFAULT_PIPELINE
-    if recommendation in ("STRONG_INVEST", "INVEST"):
+    recommendation_clean = recommendation.upper().replace(" ", "_")
+    if recommendation_clean in ("STRONG_INVEST", "INVEST"):
         stage_id = "appointmentscheduled"  # Screening
     else:
         stage_id = "closedlost"  # Passed/Not Pursuing (MONITOR, PASS, STRONG_PASS)
