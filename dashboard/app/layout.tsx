@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Christina — GroundUp AI Dashboard",
-  description: "Internal team dashboard for Christina, the GroundUp AI assistant",
+  title: "Christina — Ground Up AI Dashboard",
+  description: "Internal team dashboard for Christina, the Ground Up AI assistant",
 }
 
 export default function RootLayout({

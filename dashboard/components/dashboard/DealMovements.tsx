@@ -17,7 +17,7 @@ function timeAgo(ts: string | null): string {
 function DealLink({ id, name }: { id: string; name: string }) {
   return (
     <a
-      href={`https://app.hubspot.com/contacts/48aborr/deal/${id}`}
+      href={`https://app.hubspot.com/contacts/49139382/deal/${id}`}
       target="_blank"
       rel="noopener noreferrer"
       className="text-xs font-medium hover:text-primary transition-colors inline-flex items-center gap-1"

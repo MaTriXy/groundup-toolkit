@@ -48,7 +48,7 @@ export function Sidebar({
         {!collapsed && (
           <div className="flex flex-col">
             <span className="text-sm font-semibold tracking-tight">Christina</span>
-            <span className="text-[10px] text-muted-foreground">by GroundUp</span>
+            <span className="text-[10px] text-muted-foreground">by Ground Up</span>
           </div>
         )}
       </div>

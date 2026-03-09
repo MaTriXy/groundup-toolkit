@@ -13,6 +13,7 @@ import { SignalFeed } from "@/components/dashboard/SignalFeed"
 import { DealSources } from "@/components/dashboard/DealSources"
 import { ResponseTime } from "@/components/dashboard/ResponseTime"
 import { SignalConversion } from "@/components/dashboard/SignalConversion"
+import { ScoutWatchlist } from "@/components/dashboard/ScoutWatchlist"
 import { ServiceGrid } from "@/components/services/ServiceGrid"
 import { KeyboardShortcuts } from "@/components/dashboard/KeyboardShortcuts"
 
@@ -57,8 +58,10 @@ export default function DashboardPage() {
         <SignalConversion />
       </div>
 
-      {/* Signals */}
-      <div className="mb-8">
+      {/* Signals & Scout */}
+      <SectionHeader>Founder Scout</SectionHeader>
+      <div className="grid gap-6 lg:grid-cols-2 mb-8">
+        <ScoutWatchlist />
         <SignalFeed />
       </div>
 

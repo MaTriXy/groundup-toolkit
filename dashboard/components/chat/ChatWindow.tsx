@@ -98,7 +98,7 @@ export function ChatWindow() {
                   <ChristinaAvatar size="xl" className="mb-4" />
                   <p className="text-sm font-medium mb-1">Hey, I&apos;m Christina</p>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Your AI assistant at GroundUp. Ask me about deals, meetings, portfolio companies, or any service.
+                    Your AI assistant at Ground Up. Ask me about deals, meetings, portfolio companies, or any service.
                   </p>
                 </div>
               )}

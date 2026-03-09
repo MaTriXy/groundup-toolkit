@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# [gog→gws migration applied 2026-03-05 10:20]
 import os
 import sys
 import json
@@ -6,16 +7,15 @@ import subprocess
 import tempfile
 import requests
 import glob
-import fcntl
 from datetime import datetime, timedelta
 import re
 
 # Support both local (scripts/../lib/) and server (~/.openclaw/lib/) layouts
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# sys.path fixed for gws migration
 sys.path.insert(0, os.path.expanduser('~/.openclaw'))
 from lib.config import config
-from lib.safe_url import is_safe_url
-from lib.gws import gws_gmail_search, gws_gmail_thread_get, gws_gmail_modify, gws_gmail_send, gws_gmail_attachment_download
+from lib.gws import (gws_gmail_search, gws_gmail_thread_get, gws_gmail_modify, gws_gmail_send, gws_gmail_attachment_download)
+from lib.safe_url import is_safe_url, safe_request
 
 ANTHROPIC_API_KEY = config.anthropic_api_key
 
@@ -51,46 +51,26 @@ _STATE_DIR = os.path.expanduser("~/.groundup-toolkit/state")
 os.makedirs(_STATE_DIR, mode=0o700, exist_ok=True)
 DEAL_ANALYZER_STATE = os.path.join(_STATE_DIR, "deal-analyzer-state.json")
 
+
+
+
 def check_recent_emails():
+    """Check for new emails via gws."""
     print(f'[{datetime.now()}] Checking for new emails...')
     team_emails = ' OR '.join([f'from:{email}' for email in TEAM_MEMBERS.keys()])
-    query = f'in:inbox -{PROCESSED_LABEL} ({team_emails}) newer_than:2h'
-    threads = gws_gmail_search(query, max_results=20)
-    if not threads:
-        return []
-    # Enrich with from/subject from message headers (gws search only returns id/snippet)
-    enriched = []
-    for t in threads:
-        thread_id = t.get('id', '')
-        detail = gws_gmail_thread_get(thread_id)
-        if not detail or 'messages' not in detail:
-            continue
-        # Use last message in thread (the forwarded email, not the original)
-        first_msg = detail['messages'][-1]
-        headers = first_msg.get('payload', {}).get('headers', [])
-        from_val = ''
-        subject_val = ''
-        for h in headers:
-            name = h.get('name', '').lower()
-            if name == 'from':
-                from_val = h.get('value', '')
-            elif name == 'subject':
-                subject_val = h.get('value', '')
-        enriched.append({
-            'id': thread_id,
-            'from': from_val,
-            'subject': subject_val,
-            'snippet': t.get('snippet', ''),
-        })
-    return enriched
+    query = f'in:inbox -{PROCESSED_LABEL} ({team_emails}) newer_than:3h'
+    return gws_gmail_search(query, max_results=20)
+
 
 def get_email_body(thread_id):
-    """Get email body to check for LP mentions"""
-    detail = gws_gmail_thread_get(thread_id)
-    if detail and 'messages' in detail:
-        for msg in detail['messages']:
-            return msg.get('snippet', '')
+    """Get email body via gws."""
+    result = gws_gmail_thread_get(thread_id)
+    if result and 'messages' in result:
+        for msg in result['messages']:
+            body = msg.get('snippet', '')
+            return body
     return ''
+
 
 def is_lp_email(subject, body):
     """Check if email mentions LP (Limited Partner)"""
@@ -107,7 +87,7 @@ def _is_own_firm_name(name):
 
 def extract_company_info(thread):
     subject = thread.get('subject', '')
-    # Strip all Fwd:/Re:/Fw: prefixes (loop handles "Fwd: Re: Re: ...")
+    # Strip ALL Fwd:/Re:/Fw: prefixes (not just one)
     subject_clean = subject
     while re.match(r'^(re|fwd|fw):\s*', subject_clean, re.IGNORECASE):
         subject_clean = re.sub(r'^(re|fwd|fw):\s*', '', subject_clean, flags=re.IGNORECASE).strip()
@@ -151,64 +131,7 @@ def extract_company_info(thread):
     if _is_own_firm_name(company_name):
         company_name = ''
 
-    # Strip trailing punctuation and dangling separators
-    company_name = re.sub(r'\s*[-–—:+,]\s*$', '', company_name).strip()
-
-    confident = bool(company_name and len(company_name) >= 3 and '?' not in company_name)
-
-    # Fallback: extract company from recipient email domains in snippet
-    snippet = thread.get('snippet', '')
-    if not confident:
-        # Look for non-team email domains in snippet (e.g. amir@sayfin.ai → Sayfin)
-        all_emails = re.findall(r'[\w.+-]+@([\w-]+)\.\w+', snippet)
-        team_domain = config.team_domain.split('.')[0].lower()
-        external_domains = [d for d in all_emails if d.lower() != team_domain and d.lower() not in ('gmail', 'yahoo', 'hotmail', 'outlook', 'google')]
-        if external_domains:
-            company_name = external_domains[0].capitalize()
-            confident = False  # Domain-based guess, needs verification
-
-    # Fallback: ask Claude to extract company name from email content
-    if not confident and ANTHROPIC_API_KEY:
-        claude_name = _extract_company_with_claude(subject, snippet)
-        if claude_name:
-            company_name = claude_name
-            confident = False  # Claude guess, needs verification
-
-    return {'name': company_name, 'confident': confident, 'description': f'Created from email: {subject}'}
-
-
-def _extract_company_with_claude(subject, snippet):
-    """Use Claude to extract company name from email subject + snippet."""
-    try:
-        import requests as req
-        resp = req.post(
-            'https://api.anthropic.com/v1/messages',
-            headers={
-                'x-api-key': ANTHROPIC_API_KEY,
-                'anthropic-version': '2023-06-01',
-                'content-type': 'application/json',
-            },
-            json={
-                'model': 'claude-haiku-4-5-20251001',
-                'max_tokens': 50,
-                'messages': [{'role': 'user', 'content': (
-                    f'Extract the startup/company name from this email. '
-                    f'Return ONLY the company name, nothing else. '
-                    f'If you cannot determine it, return "Unknown".\n\n'
-                    f'Subject: {subject}\n'
-                    f'Preview: {snippet[:500]}'
-                )}],
-            },
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            name = resp.json()['content'][0]['text'].strip().strip('"\'')
-            if name and name.lower() != 'unknown' and len(name) < 100:
-                print(f'  Claude extracted company name: {name}')
-                return name
-    except Exception:
-        pass
-    return None
+    return {'name': company_name, 'description': f'Created from email: {subject}'}
 
 def create_hubspot_company(company_data):
     if not MATON_API_KEY:
@@ -290,7 +213,7 @@ def associate_deal_company(deal_id, company_id):
         return False
 
 def send_confirmation_email(to_email, company_name, pipeline_name, stage_name, deal_url):
-    """Send confirmation email to the sender"""
+    """Send confirmation email to the sender via gws."""
     message = f"""Hi,
 
 Your email about {company_name} has been processed and added to HubSpot:
@@ -303,30 +226,33 @@ View deal: {deal_url}
 - Deal Automation Bot
 """
 
-    if gws_gmail_send(to_email, f'Deal Created: {company_name}', message):
+    subject = f'Deal Created: {company_name}'
+    result = gws_gmail_send(to_email, subject, message)
+    if result:
         print(f'Sent confirmation email to {to_email}')
         return True
     else:
         print(f'Error sending confirmation', file=sys.stderr)
         return False
 
-def mark_email_processed(thread_id):
-    """Add processed label, mark as read, and archive - with fallback if label fails"""
-    result = gws_gmail_modify(thread_id, add_labels=[PROCESSED_LABEL], remove_labels=['UNREAD', 'INBOX'])
 
-    if result:
+def mark_email_processed(thread_id):
+    """Add processed label, mark as read, and archive via gws."""
+    result = gws_gmail_modify(thread_id, add_labels=[PROCESSED_LABEL], remove_labels=['UNREAD', 'INBOX'])
+    if result is not None:
         print(f'Marked email as processed and archived')
         return True
     else:
+        # Fallback: just archive without label
         print(f'Warning: Could not add label, archiving anyway', file=sys.stderr)
         fallback = gws_gmail_modify(thread_id, remove_labels=['UNREAD', 'INBOX'])
-
-        if fallback:
+        if fallback is not None:
             print(f'Archived email (without label)')
             return True
         else:
             print(f'Error archiving email', file=sys.stderr)
             return False
+
 
 def send_whatsapp(phone, message):
     """Send WhatsApp message"""
@@ -560,38 +486,27 @@ def check_optin_optout_requests():
     team_emails = ' OR '.join([f'from:{email}' for email in TEAM_MEMBERS.keys()])
     query = f'in:inbox -{OPTIN_LABEL} ({team_emails}) (subject:"meeting brief" OR body:"meeting brief") newer_than:1d'
 
-    raw_threads = gws_gmail_search(query, max_results=10)
-
-    if not raw_threads:
+    threads = gws_gmail_search(query, max_results=10)
+    if not threads:
         print('  No opt-in/out requests')
         return
 
-    print(f'  Found {len(raw_threads)} potential requests')
+    print(f'  Found {len(threads)} potential requests')
 
-    for t in raw_threads:
-        thread_id = t.get('id', '')
-
-        # Get full thread details (gws search only returns id/snippet)
-        thread_details = gws_gmail_thread_get(thread_id)
-        if not thread_details or 'messages' not in thread_details:
-            continue
-
-        # Extract from/subject from first message headers
-        first_msg = thread_details['messages'][0]
-        headers = first_msg.get('payload', {}).get('headers', [])
-        from_email = ''
-        subject = ''
-        for h in headers:
-            name = h.get('name', '').lower()
-            if name == 'from':
-                from_email = h.get('value', '')
-            elif name == 'subject':
-                subject = h.get('value', '')
+    for thread in threads:
+        from_email = thread.get('from', '')
+        subject = thread.get('subject', '')
+        thread_id = thread.get('id', '')
 
         sender_match = re.search(r'<(.+?)>', from_email)
         sender_email = sender_match.group(1) if sender_match else from_email
 
         if sender_email not in TEAM_MEMBERS:
+            continue
+
+        # Get thread body
+        thread_details = gws_gmail_thread_get(thread_id)
+        if not thread_details or 'messages' not in thread_details:
             continue
 
         body = ""
@@ -682,13 +597,15 @@ To opt back in: email "opt in to meeting briefs"
             print(f'  Error processing opt-in/out: {e}', file=sys.stderr)
 
 def send_email_simple(to_email, subject, body):
-    """Send email via gws"""
-    if gws_gmail_send(to_email, subject, body):
+    """Send email via gws."""
+    result = gws_gmail_send(to_email, subject, body)
+    if result:
         print(f'    Sent confirmation email to {to_email}')
         return True
     else:
         print(f'    Error sending email', file=sys.stderr)
         return False
+
 
 def extract_deck_links(text):
     """Extract deck links from email body"""
@@ -1155,14 +1072,15 @@ def should_skip_email(subject, body):
     return False
 
 def get_email_attachments(thread_id):
-    """Get list of PDF/PPTX attachments from email"""
-    detail = gws_gmail_thread_get(thread_id)
-    if not detail:
+    """Get list of PDF/PPTX attachments from email via gws."""
+    result = gws_gmail_thread_get(thread_id)
+    if not result:
         return []
 
     attachments = []
     try:
-        messages = detail.get('messages', [])
+        # gws_gmail_thread_get returns {messages: [...]} directly (no 'thread' wrapper)
+        messages = result.get('messages', [])
         for message in messages:
             payload = message.get('payload', {})
             parts = payload.get('parts', [])
@@ -1182,10 +1100,10 @@ def get_email_attachments(thread_id):
 
     return attachments
 
+
 def download_attachment(message_id, attachment_id, filename):
-    """Download attachment to temp file"""
+    """Download attachment via gws."""
     try:
-        # Sanitize filename: strip path components and dangerous characters
         safe_filename = os.path.basename(filename)
         safe_filename = re.sub(r'[^\w.\-]', '_', safe_filename)
         if not safe_filename:
@@ -1194,12 +1112,12 @@ def download_attachment(message_id, attachment_id, filename):
         temp_dir = tempfile.gettempdir()
         output_path = os.path.join(temp_dir, safe_filename)
 
-        # Verify output stays within temp dir (prevent path traversal)
         if not os.path.realpath(output_path).startswith(os.path.realpath(temp_dir)):
             print(f'  Security: rejected suspicious filename: {filename}', file=sys.stderr)
             return None
 
-        if gws_gmail_attachment_download(message_id, attachment_id, output_path):
+        success = gws_gmail_attachment_download(message_id, attachment_id, output_path)
+        if success and os.path.exists(output_path):
             return output_path
         else:
             print(f'  Error downloading attachment', file=sys.stderr)
@@ -1207,6 +1125,7 @@ def download_attachment(message_id, attachment_id, filename):
     except Exception as e:
         print(f'  Error downloading attachment: {e}', file=sys.stderr)
         return None
+
 
 def extract_pdf_text(pdf_path):
     """Extract text from PDF using pdftotext"""
@@ -1285,28 +1204,33 @@ def save_deal_analyzer_state(deck_data, deck_url=None):
 
 
 def process_email(thread):
-    from_email = thread.get('from', '')
-    subject = thread.get('subject', 'No Subject')
     thread_id = thread.get('id', '')
 
+    # Fetch thread metadata to get From/Subject (search only returns id+snippet)
+    thread_data = gws_gmail_thread_get(thread_id, fmt='metadata')
+    if not thread_data or not thread_data.get('messages'):
+        print(f'  Skipping thread {thread_id}: could not fetch metadata')
+        return False
+
+    # Use the LAST message (most recent — the forwarding team member)
+    last_msg = thread_data['messages'][-1]
+    headers = last_msg.get('payload', {}).get('headers', [])
+    from_email = next((h['value'] for h in headers if h['name'].lower() == 'from'), '')
+    subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), 'No Subject')
+
     sender_match = re.search(r'<(.+?)>', from_email)
-    sender_email = sender_match.group(1) if sender_match else from_email
+    sender_email = sender_match.group(1) if sender_match else from_email.strip()
     if sender_email not in TEAM_MEMBERS:
-        # Fallback: scan all messages in thread for a team member sender
-        detail = gws_gmail_thread_get(thread_id)
-        found_team_sender = False
-        if detail and 'messages' in detail:
-            for msg in detail['messages']:
-                hdrs = {h['name'].lower(): h['value'] for h in msg.get('payload', {}).get('headers', [])}
-                msg_from = hdrs.get('from', '')
-                match = re.search(r'<(.+?)>', msg_from)
-                email_addr = match.group(1) if match else msg_from
-                if email_addr in TEAM_MEMBERS:
-                    sender_email = email_addr
-                    found_team_sender = True
-                    break
-        if not found_team_sender:
-            print(f'\n  Skipped: sender [{sender_email}] not in team (subject: {subject})')
+        # Try first message too (some threads have team member as first sender)
+        first_msg = thread_data['messages'][0]
+        first_headers = first_msg.get('payload', {}).get('headers', [])
+        first_from = next((h['value'] for h in first_headers if h['name'].lower() == 'from'), '')
+        first_match = re.search(r'<(.+?)>', first_from)
+        first_sender = first_match.group(1) if first_match else first_from.strip()
+        if first_sender in TEAM_MEMBERS:
+            sender_email = first_sender
+        else:
+            print(f'  Skipping: sender {sender_email} not a team member (subject: {subject})')
             return False
 
     print(f'\nProcessing: {subject}')
@@ -1334,7 +1258,7 @@ def process_email(thread):
         deal_suffix = ' - Initial Meeting'
         print('Detected: VC Deal Flow')
 
-    company_data = extract_company_info(thread)
+    company_data = extract_company_info({"subject": subject, "from": from_email, "id": thread_id})
 
     # Check for deck links and analyze if found (may override company name)
     deck_links = extract_deck_links(f'{subject} {body}')
@@ -1377,7 +1301,6 @@ def process_email(thread):
             extracted_name = extract_company_name_from_analysis(analysis)
             if extracted_name:
                 company_data['name'] = extracted_name
-                company_data['confident'] = True  # Deck analysis is reliable
                 print(f'  Company name: {extracted_name}')
 
             # Update company description with deck analysis
@@ -1409,7 +1332,6 @@ def process_email(thread):
                         extracted_name = extract_company_name_from_analysis(analysis)
                         if extracted_name:
                             company_data['name'] = extracted_name
-                            company_data['confident'] = True  # Deck analysis is reliable
                             print(f'  Company name: {extracted_name}')
 
                         # Update company description with deck analysis
@@ -1423,7 +1345,7 @@ def process_email(thread):
                 # Clean up temp file
                 try:
                     os.remove(pdf_path)
-                except Exception:
+                except:
                     pass
             else:
                 print(f'  ✗ Could not download attachment')
@@ -1456,7 +1378,7 @@ def process_email(thread):
                 payload = {'properties': {'description': company_data['description']}}
                 requests.patch(url, headers=headers, json=payload, timeout=10)
                 print(f'Updated company description with deck analysis')
-            except Exception:
+            except:
                 pass
     else:
         company_id = create_hubspot_company(company_data)
@@ -1473,17 +1395,6 @@ def process_email(thread):
         stage_name = STAGE_NAMES.get(stage_id, stage_id)
         send_confirmation_email(sender_email, company_data['name'], pipeline_name, stage_name, deal_url)
 
-        # If company name isn't confident, ask sender to verify via WhatsApp
-        if not company_data.get('confident', True):
-            sender_name = TEAM_MEMBERS.get(sender_email, 'there')
-            sender_phone = EMAIL_TO_PHONE.get(sender_email)
-            if sender_phone:
-                send_whatsapp(sender_phone,
-                    f"Hey {sender_name}, I just logged a new deal from your email \"{subject}\".\n\n"
-                    f"I'm not 100% sure about the company name — I went with *{company_data['name']}*. "
-                    f"Is that right? If not, just reply with the correct name and I'll update it in HubSpot.")
-                print(f'  Sent company name verification to {sender_name} via WhatsApp')
-
         # Save state for manual full report request (user must explicitly ask)
         if analysis:
             deck_data = parse_analysis_to_deck_data(analysis)
@@ -1494,6 +1405,227 @@ def process_email(thread):
         return True
 
     return False
+
+
+# ── RoastMyDeck email processing ──────────────────────────────────────────
+
+def check_roastmydeck_emails():
+    """Check for new RoastMyDeck analysis emails."""
+    print(f"[{datetime.now()}] Checking RoastMyDeck emails...")
+    query = f"in:inbox -{PROCESSED_LABEL} subject:[RoastMyDeck] newer_than:3h"
+    return gws_gmail_search(query, max_results=20)
+
+
+def parse_roastmydeck_email(body):
+    """Parse structured fields from a RoastMyDeck email body."""
+    fields = {}
+    for key in ["Source", "Company", "Recommendation", "Signal", "Founder", "Founder Email", "Analyzed"]:
+        match = re.search(rf"^{key}:\s*(.+)$", body, re.MULTILINE)
+        if match:
+            val = match.group(1).strip()
+            if val and val != "N/A":
+                fields[key] = val
+
+    # Extract SUMMARY section
+    summary_match = re.search(r"SUMMARY:\s*\n(.+?)(?=\n---|\nFULL REPORT:|\Z)", body, re.DOTALL)
+    if summary_match:
+        fields["summary"] = summary_match.group(1).strip()
+
+    # Extract FULL REPORT section
+    report_match = re.search(r"FULL REPORT:\s*\n(.+)", body, re.DOTALL)
+    if report_match:
+        fields["full_report"] = report_match.group(1).strip()
+
+    return fields
+
+
+def _signal_to_owner(signal, recommendation):
+    """Map RoastMyDeck signal to a default deal owner.
+
+    GREEN  → navot (for now, first look)
+    YELLOW → navot
+    RED    → navot (logged but low priority)
+    """
+    return list(TEAM_MEMBERS.keys())[0]  # First team member as default
+
+
+def process_roastmydeck_email(thread_id):
+    """Process a single RoastMyDeck analysis email."""
+    thread_data = gws_gmail_thread_get(thread_id, fmt="full")
+    if not thread_data or not thread_data.get("messages"):
+        print(f"  Could not fetch thread {thread_id}")
+        return False
+
+    msg = thread_data["messages"][-1]
+    headers = msg.get("payload", {}).get("headers", [])
+    subject = next((h["value"] for h in headers if h["name"].lower() == "subject"), "")
+
+    # Get plain text body
+    import base64
+    body = ""
+    payload = msg.get("payload", {})
+    if payload.get("parts"):
+        for part in payload["parts"]:
+            if part.get("mimeType") == "text/plain" and part.get("body", {}).get("data"):
+                body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", errors="replace")
+                break
+            if part.get("parts"):
+                for sp in part["parts"]:
+                    if sp.get("mimeType") == "text/plain" and sp.get("body", {}).get("data"):
+                        body = base64.urlsafe_b64decode(sp["body"]["data"]).decode("utf-8", errors="replace")
+                        break
+    if not body and payload.get("body", {}).get("data"):
+        body = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="replace")
+
+    if not body:
+        body = msg.get("snippet", "")
+
+    fields = parse_roastmydeck_email(body)
+    company_name = fields.get("Company", "")
+    if not company_name:
+        # Try extracting from subject: [RoastMyDeck] RECOMMENDATION - CompanyName
+        subj_match = re.search(r"\[RoastMyDeck\]\s*\w+\s*-\s*(.+)", subject)
+        company_name = subj_match.group(1).strip() if subj_match else ""
+
+    if not company_name:
+        print(f"  Skipping RoastMyDeck email: no company name found")
+        mark_email_processed(thread_id)
+        return False
+
+    recommendation = fields.get("Recommendation", "UNKNOWN")
+    signal = fields.get("Signal", "YELLOW")
+    founder = fields.get("Founder", "")
+    founder_email = fields.get("Founder Email", "")
+    summary = fields.get("summary", "")
+    full_report = fields.get("full_report", "")
+
+    print(f"\n  RoastMyDeck: {company_name} [{recommendation}] ({signal})")
+
+    # Build rich description for company
+    company_desc_parts = [f"Source: RoastMyDeck analysis"]
+    if recommendation:
+        company_desc_parts.append(f"Recommendation: {recommendation} ({signal})")
+    if founder:
+        company_desc_parts.append(f"Founder: {founder}")
+    if founder_email:
+        company_desc_parts.append(f"Founder email: {founder_email}")
+    if summary:
+        company_desc_parts.append(f"\n--- SUMMARY ---\n{summary}")
+    if full_report:
+        company_desc_parts.append(f"\n--- FULL ANALYSIS ---\n{full_report}")
+
+    company_description = "\n".join(company_desc_parts)
+
+    # Check for existing company
+    existing_company_id = search_hubspot_company(company_name)
+    if existing_company_id:
+        print(f"  Found existing company: {company_name} (ID: {existing_company_id})")
+        # Update description with analysis
+        try:
+            url = f"{MATON_BASE_URL}/crm/v3/objects/companies/{existing_company_id}"
+            h = {"Authorization": f"Bearer {MATON_API_KEY}", "Content-Type": "application/json"}
+            requests.patch(url, headers=h, json={"properties": {"description": company_description}})
+            print(f"  Updated company description with RoastMyDeck analysis")
+        except Exception:
+            pass
+        company_id = existing_company_id
+    else:
+        company_data = {"name": company_name, "description": company_description}
+        company_id = create_hubspot_company(company_data)
+        if not company_id:
+            return False
+
+    # Build deal description
+    deal_desc_parts = [f"RoastMyDeck Analysis — {recommendation} ({signal})"]
+    if founder:
+        deal_desc_parts.append(f"Founder: {founder}")
+    if founder_email:
+        deal_desc_parts.append(f"Contact: {founder_email}")
+    if summary:
+        deal_desc_parts.append(f"\n{summary}")
+    if full_report:
+        deal_desc_parts.append(f"\n--- FULL REPORT ---\n{full_report}")
+
+    deal_description = "\n".join(deal_desc_parts)
+
+    # Map recommendation to pipeline stage
+    pipeline_id = DEFAULT_PIPELINE
+    if recommendation in ("STRONG_INVEST", "INVEST"):
+        stage_id = "appointmentscheduled"  # Screening
+    else:
+        stage_id = "closedlost"  # Passed/Not Pursuing (MONITOR, PASS, STRONG_PASS)
+
+    # Assign to first team member by default
+    owner_email = _signal_to_owner(signal, recommendation)
+
+    # Create deal with description
+    owner_id = OWNER_IDS.get(owner_email)
+    url = f"{MATON_BASE_URL}/crm/v3/objects/deals"
+    h = {"Authorization": f"Bearer {MATON_API_KEY}", "Content-Type": "application/json"}
+    payload = {
+        "properties": {
+            "dealname": company_name,
+            "dealstage": stage_id,
+            "pipeline": pipeline_id,
+            "description": deal_description,
+        }
+    }
+    try:
+        response = requests.post(url, headers=h, json=payload)
+        response.raise_for_status()
+        result = response.json()
+        deal_id = result["id"]
+        print(f"  Created deal: {company_name} (ID: {deal_id})")
+        print(f"  Pipeline: {PIPELINE_NAMES.get(pipeline_id, pipeline_id)}, Stage: {STAGE_NAMES.get(stage_id, stage_id)}")
+
+        if owner_id:
+            update_deal_owner(deal_id, owner_id, owner_email)
+        if company_id:
+            associate_deal_company(deal_id, company_id)
+
+        # Create a note with the full analysis attached to the deal
+        if full_report:
+            note_body = f"RoastMyDeck Deck Analysis — {company_name}\n"
+            note_body += f"Recommendation: {recommendation} ({signal})\n"
+            if founder:
+                note_body += f"Founder: {founder}\n"
+            if founder_email:
+                note_body += f"Contact: {founder_email}\n"
+            note_body += f"\n{full_report}"
+
+            note_url = f"{MATON_BASE_URL}/crm/v3/objects/notes"
+            note_payload = {
+                "properties": {
+                    "hs_note_body": note_body,
+                    "hs_timestamp": datetime.now().isoformat() + "Z",
+                },
+                "associations": [
+                    {
+                        "to": {"id": deal_id},
+                        "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": 214}],
+                    }
+                ],
+            }
+            try:
+                note_resp = requests.post(note_url, headers=h, json=note_payload)
+                note_resp.raise_for_status()
+                print(f"  Created note with full analysis on deal")
+            except Exception as e:
+                print(f"  Warning: could not create note: {e}")
+
+        # Send confirmation (to first team member)
+        deal_url = f"https://app.hubspot.com/contacts/{config.hubspot_portal_id}/record/0-3/{deal_id}"
+        pipeline_name = PIPELINE_NAMES.get(pipeline_id, pipeline_id)
+        stage_name = STAGE_NAMES.get(stage_id, stage_id)
+        send_confirmation_email(owner_email, company_name, pipeline_name, stage_name, deal_url)
+
+        mark_email_processed(thread_id)
+        return True
+
+    except Exception as e:
+        print(f"  Error creating RoastMyDeck deal: {e}", file=sys.stderr)
+        return False
+
 
 def main():
     print(f'===== Email to Deal Automation =====')
@@ -1507,6 +1639,18 @@ def main():
     # Check for WhatsApp deal submissions
     check_whatsapp_deals()
 
+    # Check RoastMyDeck analysis emails
+    rmd_threads = check_roastmydeck_emails()
+    rmd_count = 0
+    if rmd_threads:
+        print(f"Found {len(rmd_threads)} RoastMyDeck email(s)")
+        for t in rmd_threads:
+            if process_roastmydeck_email(t["id"]):
+                rmd_count += 1
+        print(f"RoastMyDeck processed: {rmd_count}/{len(rmd_threads)}")
+    else:
+        print("No RoastMyDeck emails")
+
     threads = check_recent_emails()
     if not threads:
         print('No new emails')
@@ -1516,13 +1660,5 @@ def main():
     print(f'\nProcessed: {processed}/{len(threads)}')
 
 if __name__ == '__main__':
-    # File lock to prevent concurrent runs (10-min cron can overlap with slow deck processing)
-    _lock_dir = os.path.join(os.environ.get('TOOLKIT_ROOT', os.path.join(os.path.dirname(__file__), '..')), 'data')
-    os.makedirs(_lock_dir, exist_ok=True)
-    _lock_file = open(os.path.join(_lock_dir, 'email-to-deal.lock'), 'w')
-    try:
-        fcntl.flock(_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except IOError:
-        print('Another instance is already running, exiting.')
-        sys.exit(0)
     main()
+
