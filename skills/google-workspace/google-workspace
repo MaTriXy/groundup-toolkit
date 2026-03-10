@@ -1,8 +1,5 @@
 #!/bin/bash
-# Google Workspace OpenClaw Skill - Using gog CLI
-
-# Env vars (GOG_KEYRING_PASSWORD, GOG_ACCOUNT, etc.) should be set before running.
-# Typically loaded by the toolkit's .env or the gateway process.
+# Google Workspace OpenClaw Skill - Using gws-auth CLI
 
 ACTION="$1"
 shift
@@ -10,40 +7,44 @@ shift
 case "$ACTION" in
     calendar-list)
         MAX="${1:-10}"
-        gog calendar list --max "$MAX" 2>&1
+        gws-auth calendar events list --params "{\"calendarId\":\"primary\",\"maxResults\":$MAX,\"singleEvents\":true,\"orderBy\":\"startTime\",\"timeMin\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" 2>&1
         ;;
-    
+
     calendar-create)
         TITLE="$1"
         START="$2"
         END="$3"
         ATTENDEES="$4"
-        gog calendar create --summary "$TITLE" --start "$START" --end "$END" ${ATTENDEES:+--attendees "$ATTENDEES"} 2>&1
+        if [ -n "$ATTENDEES" ]; then
+            gws-auth calendar +insert --summary "$TITLE" --start "$START" --end "$END" --attendee "$ATTENDEES" 2>&1
+        else
+            gws-auth calendar +insert --summary "$TITLE" --start "$START" --end "$END" 2>&1
+        fi
         ;;
-    
+
     calendar-delete)
         EVENT_ID="$1"
-        gog calendar delete --id "$EVENT_ID" 2>&1
+        gws-auth calendar events delete --params "{\"calendarId\":\"primary\",\"eventId\":\"$EVENT_ID\"}" 2>&1
         ;;
-    
+
     gmail-send)
         TO="$1"
         SUBJECT="$2"
         BODY="$3"
-        gog gmail send --to "$TO" --subject "$SUBJECT" --body "$BODY" 2>&1
+        gws-auth gmail +send --to "$TO" --subject "$SUBJECT" --body "$BODY" 2>&1
         ;;
-    
+
     gmail-read)
         QUERY="${1:-is:unread}"
         MAX="${2:-10}"
-        gog gmail list --query "$QUERY" --max "$MAX" 2>&1
+        gws-auth gmail users threads list --params "{\"userId\":\"me\",\"q\":\"$QUERY\",\"maxResults\":$MAX}" 2>&1
         ;;
-    
+
     calendar-availability)
         echo "Checking availability using calendar list..."
-        gog calendar list --max 20 2>&1
+        gws-auth calendar +agenda --week 2>&1
         ;;
-    
+
     *)
         echo "Unknown action: $ACTION"
         echo "Available: calendar-list, calendar-create, calendar-delete, gmail-send, gmail-read, calendar-availability"

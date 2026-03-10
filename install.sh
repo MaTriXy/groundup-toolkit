@@ -78,12 +78,12 @@ else
 fi
 
 echo ""
-echo "[4/7] Installing gog CLI (Google Workspace)..."
-if command -v gog &> /dev/null; then
-    echo "  gog already installed"
+echo "[4/7] Installing gws-auth CLI (Google Workspace)..."
+if command -v gws-auth &> /dev/null; then
+    echo "  gws-auth already installed"
 else
-    npm install -g --ignore-scripts gog
-    echo "  Installed gog CLI"
+    npm install -g --ignore-scripts gws-auth
+    echo "  Installed gws-auth CLI"
 fi
 
 echo ""
@@ -151,7 +151,7 @@ echo "  1. Activate the Python virtual environment:"
 echo "     source $TOOLKIT_DIR/.venv/bin/activate"
 echo ""
 echo "  2. Set up Google OAuth:"
-echo "     gog auth login"
+echo "     gws-auth auth login"
 echo ""
 echo "  3. Connect WhatsApp:"
 echo "     openclaw channels login"

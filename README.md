@@ -111,7 +111,7 @@ cp .env.example .env
 sudo bash install.sh
 
 # Connect Google + WhatsApp
-gog auth login
+gws-auth auth login
 openclaw channels login   # Scan QR code
 
 # Start gateway

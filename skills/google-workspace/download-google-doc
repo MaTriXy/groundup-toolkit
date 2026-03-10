@@ -20,17 +20,12 @@ if [ -z "$DOC_ID" ]; then
     exit 1
 fi
 
-# Set gog password and account
-export GOG_KEYRING_PASSWORD="${GOG_KEYRING_PASSWORD}"
-GOG_ACCOUNT="${GOG_ACCOUNT:-assistant@yourcompany.com}"
-
-# Download document as text
+# Download document as text via gws-auth
 OUTPUT_FILE="/tmp/google-doc-${DOC_ID}.txt"
 
-gog drive download "$DOC_ID" \
-    --account "$GOG_ACCOUNT" \
-    --format txt \
-    --out "$OUTPUT_FILE" >&2
+gws-auth drive files export \
+    --params "{\"fileId\":\"$DOC_ID\",\"mimeType\":\"text/plain\"}" \
+    -o "$OUTPUT_FILE" >&2
 
 # Output the content
 cat "$OUTPUT_FILE"

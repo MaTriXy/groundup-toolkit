@@ -100,7 +100,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 - **Entry point:** `skills/content-writer/content-writer` (41-line bash wrapper)
 - **Purpose:** Generates LinkedIn posts, Substack notes, and newsletters in team members' authentic voice. Supports voice learning from submitted samples, "keep" flow for accepted content, and topic research via Brave Search.
 - **Exposes:** `generate(message, sender_phone)`, `test()`, `main()`
-- **Depends on:** `lib/config`, `requests`, Anthropic API (Sonnet for generation, Haiku for classification/voice analysis), Brave Search API, `gog` CLI (email), `openclaw` CLI (WhatsApp)
+- **Depends on:** `lib/config`, `requests`, Anthropic API (Sonnet for generation, Haiku for classification/voice analysis), Brave Search API, `gws-auth` CLI (email), `openclaw` CLI (WhatsApp)
 - **Used by:** OpenClaw skill trigger (WhatsApp commands)
 - **Notes:**
   - State file at `skills/content-writer/state.json` (non-standard location vs other skills using `~/.groundup-toolkit/state/` or `data/`)
@@ -114,7 +114,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 - **Entry point:** `skills/deal-analyzer/deal-analyzer` (79-line bash wrapper)
 - **Purpose:** Full 12-section VC investment evaluation from pitch decks. 4-phase pipeline: Extract (Haiku) -> Research (Brave, ~15 queries) -> Analyze (Sonnet x12 parallel sections) -> Deliver (WhatsApp + email + Google Doc + HubSpot).
 - **Exposes:** `quick_analyze()`, `deep_evaluate()`, `log_to_hubspot()`, `full_report()`, `run_demo()`, `demo_report()`, `demo_end()`, `test()`, `main()`
-- **Depends on:** `lib/config`, `lib/safe_url`, `requests`, Anthropic API (Haiku + Sonnet), Brave Search API, HubSpot via Maton API, Google Drive API (creates Google Docs), Google OAuth2 (token refresh), `gog` CLI (email), `openclaw` CLI (WhatsApp), Camofox browser (DocSend extraction)
+- **Depends on:** `lib/config`, `lib/safe_url`, `requests`, Anthropic API (Haiku + Sonnet), Brave Search API, HubSpot via Maton API, Google Drive API (creates Google Docs), Google OAuth2 (token refresh), `gws-auth` CLI (email), `openclaw` CLI (WhatsApp), Camofox browser (DocSend extraction)
 - **Used by:** OpenClaw skill trigger, email-to-deal pipeline
 - **Notes:**
   - Most complex file in the codebase (2077 lines)
@@ -141,7 +141,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 - **Entry point:** `skills/founder-scout/founder-scout` (57-line bash wrapper)
 - **Purpose:** Proactive discovery of Israeli tech founders. LinkedIn search rotation, profile analysis for startup signals (role changes, serial entrepreneurs, stealth-mode hints), weekly email/WhatsApp briefings.
 - **Exposes:** `run_daily_scan()`, `run_weekly_briefing()`, `run_watchlist_update()`, `run_status()`, `run_add()`, `run_dismiss()`, `main()`
-- **Depends on:** `lib/config`, `requests`, Anthropic API (Sonnet), LinkedIn browser automation (`openclaw browser`), `gog` CLI (email), `openclaw` CLI (WhatsApp), SQLite
+- **Depends on:** `lib/config`, `requests`, Anthropic API (Sonnet), LinkedIn browser automation (`openclaw browser`), `gws-auth` CLI (email), `openclaw` CLI (WhatsApp), SQLite
 - **Used by:** Cron (daily scan, weekly briefing, Wed/Sat watchlist update)
 - **Cron schedule:** `0 7 * * *` (scan), `0 8 * * 0` (briefing), `0 14 * * 3,6` (watchlist)
 - **Notes:**
@@ -156,7 +156,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 - **Entry point:** `skills/keep-on-radar/keep-on-radar` (44-line bash wrapper)
 - **Purpose:** Monthly review of HubSpot deals in "Keep on Radar" stage. Researches company updates via Brave+Claude, sends digest emails to deal owners, monitors Gmail for reply actions (pass, keep, note).
 - **Exposes:** `run_review()`, `check_replies()`, `run_status()`, `run_pass()`, `main()`
-- **Depends on:** `lib/config`, `requests`, Anthropic API (Sonnet + Haiku), Brave Search API, HubSpot via Maton API, `gog` CLI (Gmail search/thread/send/modify), `openclaw` CLI (WhatsApp), SQLite
+- **Depends on:** `lib/config`, `requests`, Anthropic API (Sonnet + Haiku), Brave Search API, HubSpot via Maton API, `gws-auth` CLI (Gmail search/thread/send/modify), `openclaw` CLI (WhatsApp), SQLite
 - **Used by:** Cron (monthly review, 2h reply checks), WhatsApp commands
 - **Cron schedule:** `0 9 15 * *` (review), `0 */2 * * *` (check-replies)
 - **Notes:**
@@ -171,7 +171,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 - **Entry point:** `skills/meeting-reminders/meeting-reminders` (39-line bash wrapper)
 - **Purpose:** WhatsApp reminders 5-20 minutes before meetings. Enriches external attendees with HubSpot deal context (company, deals, last note). Falls back to email if WhatsApp fails.
 - **Exposes:** `process_meeting_reminders()`, `query_next_meeting()`, `main()`
-- **Depends on:** `lib/config`, `requests`, `pytz`, HubSpot via Maton API, Google Calendar via `gog` CLI, Gmail via `gog` CLI (fallback), `openclaw` CLI (WhatsApp), optional `enrichment` module, SQLite
+- **Depends on:** `lib/config`, `requests`, `pytz`, HubSpot via Maton API, Google Calendar via `gws-auth` CLI, Gmail via `gws-auth` CLI (fallback), `openclaw` CLI (WhatsApp), optional `enrichment` module, SQLite
 - **Used by:** Cron (every 5 minutes)
 - **Cron schedule:** `*/5 * * * *`
 - **Notes:**
@@ -186,7 +186,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 - **File:** `skills/meeting-bot/meeting-bot` (353-line Python script)
 - **Purpose:** Processes completed meeting recordings. Searches Google Drive for recordings, downloads transcripts, uses Claude to extract action items, emails summaries.
 - **Exposes:** Runs as batch processor (no exported API)
-- **Depends on:** `lib/config`, `requests`, Anthropic API (Sonnet), Google Drive via `gog` CLI, Gmail via `gog` CLI, SQLite
+- **Depends on:** `lib/config`, `requests`, Anthropic API (Sonnet), Google Drive via `gws-auth` CLI, Gmail via `gws-auth` CLI, SQLite
 - **Used by:** Cron (every 2 hours)
 - **Cron schedule:** `0 */2 * * *`
 - **Notes:**
@@ -199,7 +199,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 - **File:** `skills/meeting-bot/meeting-auto-join` (255-line Python script)
 - **Purpose:** Auto-joins Google Meet meetings within 5-minute window. Checks calendar, extracts Meet URLs, launches browser join.
 - **Exposes:** Runs as cron job (no exported API)
-- **Depends on:** `lib/config`, Google Calendar via `gog` CLI, `node camofox-join.js` or Playwright (on server: rewritten to use Playwright CDP)
+- **Depends on:** `lib/config`, Google Calendar via `gws-auth` CLI, `node camofox-join.js` or Playwright (on server: rewritten to use Playwright CDP)
 - **Used by:** Cron (every 3 minutes)
 - **Cron schedule:** `*/3 * * * *`
 - **Notes:**
@@ -211,7 +211,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 - **File:** `skills/meeting-bot/camofox-join.js` (909 lines)
 - **Purpose:** Full-featured meeting join bot. Connects to LinkedIn browser via CDP, joins Google Meet, mutes mic/cam, enables Gemini notes, monitors attendance, sends WhatsApp/Twilio alerts for latecomers, processes Gemini meeting notes post-meeting.
 - **Exposes:** Self-executing IIFE (no exports)
-- **Depends on:** `playwright-core` (Chromium CDP), `camoufox-js`, `../../lib/config`, Google Meet web UI, Twilio API (phone calls), `gog` CLI (Gmail), `openclaw` CLI (WhatsApp)
+- **Depends on:** `playwright-core` (Chromium CDP), `camoufox-js`, `../../lib/config`, Google Meet web UI, Twilio API (phone calls), `gws-auth` CLI (Gmail), `openclaw` CLI (WhatsApp)
 - **Used by:** `join-meeting` bash wrapper, `meeting-auto-join` (in repo version)
 - **Notes:**
   - SSRF protection via domain allowlist
@@ -223,7 +223,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 - **File:** `skills/google-workspace/google-workspace` (52-line bash script)
 - **Purpose:** Thin CLI wrapper around `gog` for calendar and Gmail operations.
 - **Exposes:** Actions: `calendar-list`, `calendar-create`, `calendar-delete`, `gmail-send`, `gmail-read`, `calendar-availability`
-- **Depends on:** `gog` CLI
+- **Depends on:** `gws-auth` CLI
 - **Used by:** OpenClaw skill trigger
 - **Notes:**
   - Shebang has escaped `!` (`#\!/bin/bash`)
@@ -233,25 +233,25 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 ### Google Workspace - Calendar for User
 - **File:** `skills/google-workspace/calendar-for-user` (49-line bash script)
 - **Purpose:** Gets calendar events for a team member identified by phone number.
-- **Depends on:** `lib/config` (via inline Python), `gog` CLI
+- **Depends on:** `lib/config` (via inline Python), `gws-auth` CLI
 - **Notes:** Uses GNU `date -d` -- won't work on macOS
 
 ### Google Workspace - Create Calendar Event
 - **File:** `skills/google-workspace/create-calendar-event` (110-line Python script)
 - **Purpose:** Creates calendar events with attendee invitations.
-- **Depends on:** `gog` CLI
+- **Depends on:** `gws-auth` CLI
 - **Notes:** Hardcoded timezone `+02:00` -- wrong during Israel DST (+03:00)
 
 ### Google Workspace - Download Google Doc
 - **File:** `skills/google-workspace/download-google-doc` (36-line bash script)
 - **Purpose:** Downloads a Google Doc as plain text.
-- **Depends on:** `gog` CLI
+- **Depends on:** `gws-auth` CLI
 - **Notes:** Uses `grep -oP` (Perl regex) -- not available on macOS. Default account is placeholder.
 
 ### Google Workspace - Get My Calendar
 - **File:** `skills/google-workspace/get-my-calendar` (48-line Python script)
 - **Purpose:** Shows requesting user's calendar (resolves phone to email).
-- **Depends on:** `gog` CLI
+- **Depends on:** `gws-auth` CLI
 - **Notes:** Uses deprecated `datetime.utcnow()`
 
 ### LinkedIn Browser
@@ -276,7 +276,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 ### VC Automation - Deal Pass
 - **File:** `skills/vc-automation/deal-pass-automation` (365-line Python script)
 - **Purpose:** Moves HubSpot deals to Pass (closedlost) stage from email or direct ID. Sends confirmation email.
-- **Depends on:** `requests`, HubSpot via Maton API, `gog` CLI (Gmail)
+- **Depends on:** `requests`, HubSpot via Maton API, `gws-auth` CLI (Gmail)
 - **Notes:**
   - Manual argument parsing -- fragile (no bounds checking on argv index)
   - Simplistic company name extraction from email subject
@@ -331,7 +331,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 ### Meeting Brief Opt-in Handler
 - **File:** `scripts/meeting-brief-optin-handler.py` (337 lines)
 - **Purpose:** Standalone handler for meeting-brief opt-in/opt-out requests via email (and WhatsApp placeholder).
-- **Depends on:** `lib/config`, `gog` CLI (Gmail), `openclaw` CLI (WhatsApp)
+- **Depends on:** `lib/config`, `gws-auth` CLI (Gmail), `openclaw` CLI (WhatsApp)
 - **Notes:**
   - **Duplicate** of opt-in logic in email-to-deal-automation.py
   - Modifies Python source code at runtime via regex (`set_opt_in()`) -- fragile
@@ -411,9 +411,9 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 | Anthropic (Claude) | content-writer, deal-analyzer, deck-analyzer, founder-scout, keep-on-radar, meeting-bot, meeting-notes-to-crm, research-founder | `ANTHROPIC_API_KEY` header |
 | Brave Search | content-writer, deal-analyzer, keep-on-radar, research-founder | `BRAVE_SEARCH_API_KEY` header |
 | HubSpot (via Maton) | deal-analyzer, keep-on-radar, meeting-reminders, email-to-deal, deal-pass-automation, meeting-notes-to-crm | `MATON_API_KEY` Bearer token |
-| Google Calendar | meeting-reminders, meeting-auto-join, create-calendar-event, get-my-calendar, calendar-for-user | `gog` CLI (OAuth) |
-| Gmail | content-writer, deal-analyzer, founder-scout, keep-on-radar, meeting-bot, email-to-deal, meeting-brief-optin-handler, deal-pass-automation, health-check, whatsapp-watchdog | `gog` CLI (OAuth) |
-| Google Drive | meeting-bot, deal-analyzer | `gog` CLI + direct OAuth |
+| Google Calendar | meeting-reminders, meeting-auto-join, create-calendar-event, get-my-calendar, calendar-for-user | `gws-auth` CLI (OAuth) |
+| Gmail | content-writer, deal-analyzer, founder-scout, keep-on-radar, meeting-bot, email-to-deal, meeting-brief-optin-handler, deal-pass-automation, health-check, whatsapp-watchdog | `gws-auth` CLI (OAuth) |
+| Google Drive | meeting-bot, deal-analyzer | `gws-auth` CLI + direct OAuth |
 | Twilio | ping-teammate, whatsapp-watchdog, camofox-join.js | API Key SID + Secret |
 | LinkedIn (browser) | founder-scout, linkedin skill | CDP to Chromium (port 18801) |
 | OpenClaw/WhatsApp | All skills with WhatsApp delivery | `openclaw message send` CLI |

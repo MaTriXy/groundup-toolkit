@@ -36,7 +36,7 @@ Natural language triggers:
 - 👥 **Per-team-member configuration** - Enable/disable for each person
 - 🌍 **Timezone-aware** - Displays times in each team member's timezone
 - 🔄 **Duplicate prevention** - SQLite database tracks sent notifications
-- 🗓️ **Google Calendar integration** - Uses gog CLI for calendar access
+- 🗓️ **Google Calendar integration** - Uses gws-auth CLI for calendar access
 
 ### Next Meeting Query (NEW)
 - 🔍 **On-demand lookup** - Query your next upcoming meeting anytime
@@ -229,7 +229,6 @@ When you query your next meeting, external attendees are automatically enriched 
 ## Environment Requirements
 
 **Required environment variables:**
-- `GOG_KEYRING_PASSWORD` - For gog authentication
 - `MATON_API_KEY` - For HubSpot integration (optional)
 - `WHATSAPP_ACCOUNT` - OpenClaw WhatsApp account (default: "main")
 
@@ -249,7 +248,7 @@ Recommended: Run every 5 minutes for reliable 10-minute advance notifications
 
 - **Language:** Python 3
 - **Dependencies:** pytz, requests, sqlite3
-- **Calendar API:** gog (Google Workspace CLI)
+- **Calendar API:** gws-auth (Google Workspace CLI)
 - **Messaging:** OpenClaw WhatsApp channel
 - **CRM:** Maton API (HubSpot proxy)
 - **Enrichment:** Web scraping via openclaw web search/fetch

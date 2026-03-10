@@ -6,16 +6,10 @@ Items that need human decision or are too risky to execute autonomously.
 
 ## Critical — Needs Human Action
 
-### 1. Google cookies in git history
+### 1. ~~Google cookies in git history~~ — FALSE ALARM
 - **File:** `skills/meeting-bot/google-cookies.json`
-- **Issue:** Real Google auth cookies (SID, HSID, SSID, APISID, etc.) are in git history
-- **Required action:** Run `git filter-repo` or BFG to purge from history. This rewrites git history and requires force-push.
-- **Status:** BLOCKED — destructive operation, needs explicit user approval and coordination
-
-### 2. Server vs repo divergence (gws-auth migration)
-- **Issue:** Server has been migrated from `gog` to `gws-auth` with shared `lib/gws.py`. Repo still uses `gog`.
-- **Required action:** Port server migration to repo (Phase 8 of modernization plan)
-- **Status:** DEFERRED — out of scope for this rearchitecture pass; will be addressed separately
+- **Issue:** File exists on disk but was **never committed** to git history (gitignored from the start)
+- **Status:** RESOLVED — no action needed
 
 ---
 
@@ -38,3 +32,5 @@ Items that need human decision or are too risky to execute autonomously.
 - **Opt-in handler** — Replaced source-code regex modification with JSON file (`data/meeting-brief-optin.json`)
 - **SQLite context managers** — All connections in scout.py and radar.py now use `with` blocks
 - **State file consolidation** — All state files now use `data/` directory (content-writer, deal-analyzer, meeting-bot, health-alerts)
+- **gws-auth migration** — All scripts migrated from `gog` to `gws-auth` CLI; `get_google_access_token()` uses gws-auth credentials
+- **Google cookies in git history** — False alarm; file was never committed (gitignored from start)

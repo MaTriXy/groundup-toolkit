@@ -11,11 +11,11 @@ WhatsApp gateway and AI agent framework.
 
 **Docs**: [openclaw.ai](https://openclaw.ai)
 
-### Google Workspace (via gog CLI)
+### Google Workspace (via gws-auth CLI)
 Calendar, Gmail, and Drive access.
 
-1. Install: `npm install -g gog`
-2. Set up OAuth: `gog auth login`
+1. Install: `npm install -g gws-auth`
+2. Set up OAuth: `gws-auth auth login`
 3. Grant access to: Calendar, Gmail, Drive
 
 The assistant's Google account needs:

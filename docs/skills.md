@@ -80,7 +80,7 @@ Calls a team member's phone via Twilio when triggered by a WhatsApp message. Sec
 
 **Path**: `skills/google-workspace/`
 
-Wrapper scripts for the gog CLI:
+Wrapper scripts for the gws-auth CLI:
 - Calendar operations (list, create, delete events)
 - Gmail operations (send, read, search)
 - Google Drive/Docs access

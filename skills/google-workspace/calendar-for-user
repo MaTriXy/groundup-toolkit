@@ -46,4 +46,4 @@ START=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 END=$(date -u -d "+7 days" +"%Y-%m-%dT%H:%M:%SZ")
 
 echo "# Calendar for $EMAIL (phone: $PHONE)"
-gog calendar events "$EMAIL" --from "$START" --to "$END" --max "$MAX"
+gws-auth calendar events list --params "{\"calendarId\":\"$EMAIL\",\"timeMin\":\"$START\",\"timeMax\":\"$END\",\"maxResults\":$MAX,\"singleEvents\":true,\"orderBy\":\"startTime\"}"

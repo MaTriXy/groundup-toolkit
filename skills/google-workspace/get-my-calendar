@@ -6,10 +6,6 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from lib.config import config
 
-os.environ["GOG_ACCOUNT"] = config.assistant_email
-if "GOG_KEYRING_PASSWORD" not in os.environ:
-    print("Warning: GOG_KEYRING_PASSWORD not set in environment", file=sys.stderr)
-
 # Build lookup dicts from config
 PHONE_TO_EMAIL = config.team_phones  # {phone: email}
 NAME_MAP = {m['email']: m['name'].split()[0] for m in config.team_members}
@@ -40,9 +36,15 @@ max_events = sys.argv[2] if len(sys.argv) > 2 else "10"
 print(f"{name}'s Calendar ({email})")
 print("=" * 60)
 
-cmd = ["gog", "calendar", "events", email, "--from", start, "--to", end, "--max", max_events]
-result = subprocess.run(cmd, env=os.environ)
+import json
+params = json.dumps({
+    "calendarId": email,
+    "timeMin": start,
+    "timeMax": end,
+    "maxResults": int(max_events),
+    "singleEvents": True,
+    "orderBy": "startTime",
+})
+cmd = ["gws-auth", "calendar", "events", "list", "--params", params]
+result = subprocess.run(cmd)
 sys.exit(result.returncode)
-
-# Note: This script is READ-ONLY
-# For creating events, use: gog calendar create primary --attendees <user>

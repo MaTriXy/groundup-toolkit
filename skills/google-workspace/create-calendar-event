@@ -74,19 +74,13 @@ def main():
     start_dt = start_time.isoformat()
     end_dt = end_time.isoformat()
 
-    # Set GOG environment from config
-    os.environ.setdefault("GOG_KEYRING_PASSWORD", os.getenv("GOG_KEYRING_PASSWORD", ""))
-    os.environ["GOG_ACCOUNT"] = config.assistant_email
-
-    # Build gog command
+    # Build gws-auth command
     cmd = [
-        "gog", "calendar", "create", "primary",
+        "gws-auth", "calendar", "+insert",
         "--summary", title,
-        "--from", start_dt,
-        "--to", end_dt,
-        "--attendees", attendee_email,
-        "--account", config.assistant_email,
-        "--json"
+        "--start", start_dt,
+        "--end", end_dt,
+        "--attendee", attendee_email,
     ]
 
     print(f"Creating event: {title}")

@@ -1,11 +1,11 @@
 ---
 name: Google Workspace
-description: Access Google Calendar, Gmail, and Google Docs/Drive using gog CLI. Download Google Docs, manage calendar events, and send emails.
+description: Access Google Calendar, Gmail, and Google Docs/Drive using gws-auth CLI. Download Google Docs, manage calendar events, and send emails.
 ---
 
 # Google Workspace Integration
 
-Use the `gog` CLI to interact with Google Calendar, Gmail, and Google Drive/Docs.
+Use the `gws-auth` CLI to interact with Google Calendar, Gmail, and Google Drive/Docs.
 
 ## Google Docs Operations
 
@@ -42,26 +42,22 @@ Phone-to-email mappings are loaded from `config.yaml`. See `config.example.yaml`
 **Syntax for creating events:**
 
 ```bash
-gog calendar create primary \
+gws-auth calendar +insert \
   --summary "Event Title" \
-  --from "YYYY-MM-DDTHH:MM:SS+02:00" \
-  --to "YYYY-MM-DDTHH:MM:SS+02:00" \
-  --attendees user@yourcompany.com \
-  --account your-assistant@yourcompany.com \
-  --json
+  --start "YYYY-MM-DDTHH:MM:SS+02:00" \
+  --end "YYYY-MM-DDTHH:MM:SS+02:00" \
+  --attendee user@yourcompany.com
 ```
 
 **Example: Create "Pick up kids from school" event:**
 
 ```bash
-gog calendar create primary \
+gws-auth calendar +insert \
   --summary "Pick up kids from school" \
-  --from "2026-02-08T12:45:00+02:00" \
-  --to "2026-02-08T13:15:00+02:00" \
-  --attendees user@yourcompany.com \
-  --description "Reminder to pick up kids" \
-  --account your-assistant@yourcompany.com \
-  --json
+  --start "2026-02-08T12:45:00+02:00" \
+  --end "2026-02-08T13:15:00+02:00" \
+  --attendee user@yourcompany.com \
+  --description "Reminder to pick up kids"
 ```
 
 **Time Format Guidelines:**
@@ -73,40 +69,29 @@ gog calendar create primary \
 **Optional Flags:**
 - `--description "text"` - Add event description
 - `--location "address"` - Add location
-- `--reminder popup:15m` - Add 15-minute popup reminder
-- `--with-meet` - Create Google Meet link
-- `--all-day` - Make it an all-day event
 
 ### Important Notes:
 
-1. **Always use --account with the assistant email** (from config) when creating events
-2. **Always add the requesting user as --attendees**
-3. **Use primary as the calendar ID** (assistant's calendar)
-4. **Calculate proper timezone offset** (Israel is +02:00 or +03:00)
-5. **If time is ambiguous**, ask the user for clarification
+1. **Always add the requesting user as --attendee**
+2. **Use primary as the default calendar** (assistant's calendar)
+3. **Calculate proper timezone offset** (Israel is +02:00 or +03:00)
+4. **If time is ambiguous**, ask the user for clarification
 
 ## Gmail Operations
 
-### List emails:
+### Send email:
 
 ```bash
-gog gmail messages --max 10 --account your-assistant@yourcompany.com
+gws-auth gmail +send --to user@example.com --subject "Subject" --body "Message body"
 ```
 
-### Search emails:
+### Search threads:
 
 ```bash
-gog gmail messages --query "from:user@example.com" --max 5
-```
-
-### Read an email:
-
-```bash
-gog gmail thread <thread-id> --account your-assistant@yourcompany.com
+gws-auth gmail users threads list --params '{"userId":"me","q":"from:user@example.com","maxResults":5}'
 ```
 
 ## Authentication
 
-All commands use the assistant account credentials (configured in config.yaml) stored in the gog keychain.
-
-The GOG_KEYRING_PASSWORD environment variable is automatically set by the gateway service.
+All commands use the assistant account credentials configured via `gws-auth auth login`.
+Credentials are stored in `~/.config/gws/`.

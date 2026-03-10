@@ -369,40 +369,23 @@ def gws_drive_download(file_id, out_path, mime_type=None):
 # Auth / token helpers
 # ---------------------------------------------------------------------------
 
-_GOG_CREDENTIALS_PATH = os.path.expanduser("~/.config/gogcli/credentials.json")
+_GWS_CREDENTIALS_PATH = os.path.expanduser("~/.config/gws/credentials.json")
 
 
 def get_google_access_token():
-    """Get a fresh Google OAuth2 access token via gog's stored credentials.
+    """Get a fresh Google OAuth2 access token via gws-auth stored credentials.
 
-    Uses gog's keyring to export the refresh token, then exchanges it
-    for a fresh access token via Google's OAuth2 API.
+    Checks GOOGLE_WORKSPACE_CLI_TOKEN env var first (set by gws-auth),
+    then falls back to reading credentials.json and exchanging refresh token.
     """
+    # Check env var first (gws-auth sets this when running in its context)
+    env_token = os.environ.get("GOOGLE_WORKSPACE_CLI_TOKEN")
+    if env_token:
+        return env_token
+
     try:
-        # Export token from gog keyring
-        fd, token_path = tempfile.mkstemp(suffix='.json', prefix='gws-token-')
-        os.close(fd)
-        try:
-            from lib.config import config as _config
-            result = subprocess.run(
-                ['gog', 'auth', 'tokens', 'export', _config.assistant_email,
-                 '--out', token_path, '--overwrite', '--no-input'],
-                capture_output=True, text=True, timeout=15,
-            )
-            if result.returncode != 0:
-                print(f"  Token export failed: {result.stderr.strip()[:200]}", file=sys.stderr)
-                return None
-
-            with open(token_path) as f:
-                token_data = json.load(f)
-        finally:
-            try:
-                os.unlink(token_path)
-            except OSError:
-                pass
-
-        # Read client credentials
-        with open(_GOG_CREDENTIALS_PATH) as f:
+        # Read gws-auth credentials (client_id, client_secret, refresh_token)
+        with open(_GWS_CREDENTIALS_PATH) as f:
             creds = json.load(f)
 
         # Exchange refresh token for access token
@@ -410,7 +393,7 @@ def get_google_access_token():
         response = requests.post('https://oauth2.googleapis.com/token', data={
             'client_id': creds['client_id'],
             'client_secret': creds['client_secret'],
-            'refresh_token': token_data['refresh_token'],
+            'refresh_token': creds['refresh_token'],
             'grant_type': 'refresh_token',
         }, timeout=10)
 

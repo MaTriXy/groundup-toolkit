@@ -51,13 +51,13 @@ Fill in API keys:
 sudo bash install.sh
 ```
 
-This installs: Node.js 18+, Python 3 (with venv), OpenClaw, gog CLI, js-yaml, and all dependencies.
+This installs: Node.js 18+, Python 3 (with venv), OpenClaw, gws-auth CLI, js-yaml, and all dependencies.
 Python packages are installed in `.venv/` — activate with `source .venv/bin/activate`.
 
 ## Step 4: Google OAuth
 
 ```bash
-gog auth login
+gws-auth auth login
 ```
 
 Follow the browser-based OAuth flow. This grants access to:
@@ -132,12 +132,12 @@ pkill -f openclaw-gateway
 nohup openclaw gateway > /var/log/openclaw-gateway.log 2>&1 &
 ```
 
-### gog commands failing
+### gws-auth commands failing
 Check OAuth tokens:
 ```bash
-gog auth status
+gws-auth auth status
 # If expired:
-gog auth login
+gws-auth auth login
 ```
 
 ### Meeting bot can't join meets
