@@ -29,6 +29,7 @@ import json
 import time
 import fcntl
 import sqlite3
+import contextlib
 import tempfile
 import subprocess
 import requests
@@ -125,74 +126,74 @@ class ScoutDatabase:
         self.db_path = db_path
         self._init_db()
 
+    def _conn(self):
+        """Return a connection as a context manager for safe cleanup."""
+        return contextlib.closing(sqlite3.connect(self.db_path))
+
     def _init_db(self):
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS tracked_people (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            linkedin_url TEXT UNIQUE,
-            source TEXT,
-            signal_tier TEXT,
-            last_signal TEXT,
-            last_scanned TEXT,
-            added_at TEXT NOT NULL,
-            status TEXT DEFAULT 'active',
-            notes TEXT
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS signal_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            person_id INTEGER REFERENCES tracked_people(id),
-            signal_type TEXT NOT NULL,
-            signal_tier TEXT NOT NULL,
-            description TEXT,
-            source_url TEXT,
-            detected_at TEXT NOT NULL
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS scan_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            scan_type TEXT NOT NULL,
-            started_at TEXT NOT NULL,
-            completed_at TEXT,
-            queries_run INTEGER DEFAULT 0,
-            people_found INTEGER DEFAULT 0,
-            signals_detected INTEGER DEFAULT 0
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS search_rotation (
-            query_key TEXT PRIMARY KEY,
-            last_run TEXT,
-            run_count INTEGER DEFAULT 0
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS sent_profiles (
-            linkedin_url TEXT PRIMARY KEY,
-            name TEXT,
-            sent_at TEXT NOT NULL
-        )''')
-        conn.commit()
-        conn.close()
+        with self._conn() as conn:
+            c = conn.cursor()
+            c.execute('''CREATE TABLE IF NOT EXISTS tracked_people (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                linkedin_url TEXT UNIQUE,
+                source TEXT,
+                signal_tier TEXT,
+                last_signal TEXT,
+                last_scanned TEXT,
+                added_at TEXT NOT NULL,
+                status TEXT DEFAULT 'active',
+                notes TEXT
+            )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS signal_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                person_id INTEGER REFERENCES tracked_people(id),
+                signal_type TEXT NOT NULL,
+                signal_tier TEXT NOT NULL,
+                description TEXT,
+                source_url TEXT,
+                detected_at TEXT NOT NULL
+            )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS scan_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_type TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                completed_at TEXT,
+                queries_run INTEGER DEFAULT 0,
+                people_found INTEGER DEFAULT 0,
+                signals_detected INTEGER DEFAULT 0
+            )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS search_rotation (
+                query_key TEXT PRIMARY KEY,
+                last_run TEXT,
+                run_count INTEGER DEFAULT 0
+            )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS sent_profiles (
+                linkedin_url TEXT PRIMARY KEY,
+                name TEXT,
+                sent_at TEXT NOT NULL
+            )''')
+            conn.commit()
 
     def is_profile_sent(self, linkedin_url):
-        conn = sqlite3.connect(self.db_path)
-        result = conn.execute(
-            'SELECT 1 FROM sent_profiles WHERE linkedin_url = ?', (linkedin_url,)
-        ).fetchone()
-        conn.close()
+        with self._conn() as conn:
+            result = conn.execute(
+                'SELECT 1 FROM sent_profiles WHERE linkedin_url = ?', (linkedin_url,)
+            ).fetchone()
         return result is not None
 
     def mark_profiles_sent(self, profiles):
-        conn = sqlite3.connect(self.db_path)
-        now = datetime.now().isoformat()
-        for p in profiles:
-            conn.execute(
-                'INSERT OR IGNORE INTO sent_profiles (linkedin_url, name, sent_at) VALUES (?, ?, ?)',
-                (p['linkedin_url'], p['name'], now)
-            )
-        conn.commit()
-        conn.close()
+        with self._conn() as conn:
+            now = datetime.now().isoformat()
+            for p in profiles:
+                conn.execute(
+                    'INSERT OR IGNORE INTO sent_profiles (linkedin_url, name, sent_at) VALUES (?, ?, ?)',
+                    (p['linkedin_url'], p['name'], now)
+                )
+            conn.commit()
 
     def add_person(self, name, linkedin_url=None, source='linkedin_search'):
-        conn = sqlite3.connect(self.db_path)
-        try:
+        with self._conn() as conn:
             conn.execute(
                 'INSERT OR IGNORE INTO tracked_people (name, linkedin_url, source, added_at) VALUES (?, ?, ?, ?)',
                 (name, linkedin_url, source, datetime.now().isoformat())
@@ -203,83 +204,73 @@ class ScoutDatabase:
                 (name, linkedin_url, linkedin_url)
             ).fetchone()
             return person_id[0] if person_id else None
-        finally:
-            conn.close()
 
     def get_person_by_name(self, name):
-        conn = sqlite3.connect(self.db_path)
-        result = conn.execute(
-            'SELECT id, name, linkedin_url, signal_tier, status FROM tracked_people WHERE name = ? AND status = ?',
-            (name, 'active')
-        ).fetchone()
-        conn.close()
+        with self._conn() as conn:
+            result = conn.execute(
+                'SELECT id, name, linkedin_url, signal_tier, status FROM tracked_people WHERE name = ? AND status = ?',
+                (name, 'active')
+            ).fetchone()
         return result
 
     def get_person_by_linkedin(self, url):
-        conn = sqlite3.connect(self.db_path)
-        result = conn.execute(
-            'SELECT id FROM tracked_people WHERE linkedin_url = ?', (url,)
-        ).fetchone()
-        conn.close()
+        with self._conn() as conn:
+            result = conn.execute(
+                'SELECT id FROM tracked_people WHERE linkedin_url = ?', (url,)
+            ).fetchone()
         return result[0] if result else None
 
     def get_active_people(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        results = conn.execute(
-            'SELECT * FROM tracked_people WHERE status = ? ORDER BY signal_tier DESC, added_at DESC',
-            ('active',)
-        ).fetchall()
-        conn.close()
+        with self._conn() as conn:
+            conn.row_factory = sqlite3.Row
+            results = conn.execute(
+                'SELECT * FROM tracked_people WHERE status = ? ORDER BY signal_tier DESC, added_at DESC',
+                ('active',)
+            ).fetchall()
         return [dict(r) for r in results]
 
     def record_signal(self, person_id, signal_type, tier, description, source_url=None):
-        conn = sqlite3.connect(self.db_path)
-        conn.execute(
-            'INSERT INTO signal_history (person_id, signal_type, signal_tier, description, source_url, detected_at) VALUES (?, ?, ?, ?, ?, ?)',
-            (person_id, signal_type, tier, description, source_url, datetime.now().isoformat())
-        )
-        conn.execute(
-            'UPDATE tracked_people SET signal_tier = ?, last_signal = ?, last_scanned = ? WHERE id = ?',
-            (tier, description, datetime.now().isoformat(), person_id)
-        )
-        conn.commit()
-        conn.close()
+        with self._conn() as conn:
+            conn.execute(
+                'INSERT INTO signal_history (person_id, signal_type, signal_tier, description, source_url, detected_at) VALUES (?, ?, ?, ?, ?, ?)',
+                (person_id, signal_type, tier, description, source_url, datetime.now().isoformat())
+            )
+            conn.execute(
+                'UPDATE tracked_people SET signal_tier = ?, last_signal = ?, last_scanned = ? WHERE id = ?',
+                (tier, description, datetime.now().isoformat(), person_id)
+            )
+            conn.commit()
 
     def get_signals_since(self, since_date):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        results = conn.execute(
-            '''SELECT sh.*, tp.name, tp.linkedin_url
-               FROM signal_history sh
-               JOIN tracked_people tp ON sh.person_id = tp.id
-               WHERE sh.detected_at >= ?
-               ORDER BY sh.signal_tier ASC, sh.detected_at DESC''',
-            (since_date,)
-        ).fetchall()
-        conn.close()
+        with self._conn() as conn:
+            conn.row_factory = sqlite3.Row
+            results = conn.execute(
+                '''SELECT sh.*, tp.name, tp.linkedin_url
+                   FROM signal_history sh
+                   JOIN tracked_people tp ON sh.person_id = tp.id
+                   WHERE sh.detected_at >= ?
+                   ORDER BY sh.signal_tier ASC, sh.detected_at DESC''',
+                (since_date,)
+            ).fetchall()
         return [dict(r) for r in results]
 
     def get_rotation_queue(self, max_queries):
         """Select queries due to run based on priority intervals."""
         now = datetime.now()
-        conn = sqlite3.connect(self.db_path)
-        queue = []
+        with self._conn() as conn:
+            queue = []
+            for key, info in SEARCH_QUERIES.items():
+                row = conn.execute(
+                    'SELECT last_run FROM search_rotation WHERE query_key = ?', (key,)
+                ).fetchone()
 
-        for key, info in SEARCH_QUERIES.items():
-            row = conn.execute(
-                'SELECT last_run FROM search_rotation WHERE query_key = ?', (key,)
-            ).fetchone()
+                interval_days = PRIORITY_INTERVALS[info['priority']]
+                if row and row[0]:
+                    last_run = datetime.fromisoformat(row[0])
+                    if (now - last_run).total_seconds() < interval_days * 86400:
+                        continue
 
-            interval_days = PRIORITY_INTERVALS[info['priority']]
-            if row and row[0]:
-                last_run = datetime.fromisoformat(row[0])
-                if (now - last_run).total_seconds() < interval_days * 86400:
-                    continue
-
-            queue.append((key, info['priority']))
-
-        conn.close()
+                queue.append((key, info['priority']))
 
         # Sort: high first, then medium, then low
         priority_order = {'high': 0, 'medium': 1, 'low': 2}
@@ -288,38 +279,34 @@ class ScoutDatabase:
         return [key for key, _ in queue[:max_queries]]
 
     def update_rotation(self, query_key):
-        conn = sqlite3.connect(self.db_path)
-        conn.execute(
-            'INSERT OR REPLACE INTO search_rotation (query_key, last_run, run_count) VALUES (?, ?, COALESCE((SELECT run_count FROM search_rotation WHERE query_key = ?), 0) + 1)',
-            (query_key, datetime.now().isoformat(), query_key)
-        )
-        conn.commit()
-        conn.close()
+        with self._conn() as conn:
+            conn.execute(
+                'INSERT OR REPLACE INTO search_rotation (query_key, last_run, run_count) VALUES (?, ?, COALESCE((SELECT run_count FROM search_rotation WHERE query_key = ?), 0) + 1)',
+                (query_key, datetime.now().isoformat(), query_key)
+            )
+            conn.commit()
 
     def log_scan(self, scan_type, queries_run=0, people_found=0, signals_detected=0):
-        conn = sqlite3.connect(self.db_path)
-        conn.execute(
-            'INSERT INTO scan_log (scan_type, started_at, completed_at, queries_run, people_found, signals_detected) VALUES (?, ?, ?, ?, ?, ?)',
-            (scan_type, datetime.now().isoformat(), datetime.now().isoformat(), queries_run, people_found, signals_detected)
-        )
-        conn.commit()
-        conn.close()
+        with self._conn() as conn:
+            conn.execute(
+                'INSERT INTO scan_log (scan_type, started_at, completed_at, queries_run, people_found, signals_detected) VALUES (?, ?, ?, ?, ?, ?)',
+                (scan_type, datetime.now().isoformat(), datetime.now().isoformat(), queries_run, people_found, signals_detected)
+            )
+            conn.commit()
 
     def dismiss_person(self, person_id):
-        conn = sqlite3.connect(self.db_path)
-        conn.execute('UPDATE tracked_people SET status = ? WHERE id = ?', ('dismissed', person_id))
-        conn.commit()
-        conn.close()
+        with self._conn() as conn:
+            conn.execute('UPDATE tracked_people SET status = ? WHERE id = ?', ('dismissed', person_id))
+            conn.commit()
 
     def get_stats(self):
-        conn = sqlite3.connect(self.db_path)
-        active = conn.execute('SELECT COUNT(*) FROM tracked_people WHERE status = ?', ('active',)).fetchone()[0]
-        high = conn.execute('SELECT COUNT(*) FROM tracked_people WHERE status = ? AND signal_tier = ?', ('active', 'high')).fetchone()[0]
-        medium = conn.execute('SELECT COUNT(*) FROM tracked_people WHERE status = ? AND signal_tier = ?', ('active', 'medium')).fetchone()[0]
-        low = conn.execute('SELECT COUNT(*) FROM tracked_people WHERE status = ? AND signal_tier = ?', ('active', 'low')).fetchone()[0]
-        total_signals = conn.execute('SELECT COUNT(*) FROM signal_history').fetchone()[0]
-        total_scans = conn.execute('SELECT COUNT(*) FROM scan_log').fetchone()[0]
-        conn.close()
+        with self._conn() as conn:
+            active = conn.execute('SELECT COUNT(*) FROM tracked_people WHERE status = ?', ('active',)).fetchone()[0]
+            high = conn.execute('SELECT COUNT(*) FROM tracked_people WHERE status = ? AND signal_tier = ?', ('active', 'high')).fetchone()[0]
+            medium = conn.execute('SELECT COUNT(*) FROM tracked_people WHERE status = ? AND signal_tier = ?', ('active', 'medium')).fetchone()[0]
+            low = conn.execute('SELECT COUNT(*) FROM tracked_people WHERE status = ? AND signal_tier = ?', ('active', 'low')).fetchone()[0]
+            total_signals = conn.execute('SELECT COUNT(*) FROM signal_history').fetchone()[0]
+            total_scans = conn.execute('SELECT COUNT(*) FROM scan_log').fetchone()[0]
         return {
             'active': active, 'high': high, 'medium': medium, 'low': low,
             'total_signals': total_signals, 'total_scans': total_scans,
@@ -964,25 +951,23 @@ def run_watchlist_update():
                     linkedin_url = li_match.group(1)
                     print(f"      Found profile: {linkedin_url}")
                     # Update the person's LinkedIn URL in the DB
-                    conn = sqlite3.connect(db.db_path)
-                    conn.execute(
-                        'UPDATE tracked_people SET linkedin_url = ? WHERE id = ?',
-                        (linkedin_url, person['id'])
-                    )
-                    conn.commit()
-                    conn.close()
+                    with db._conn() as conn:
+                        conn.execute(
+                            'UPDATE tracked_people SET linkedin_url = ? WHERE id = ?',
+                            (linkedin_url, person['id'])
+                        )
+                        conn.commit()
                     time.sleep(LINKEDIN_NAV_DELAY)
                     profile_text = linkedin_profile_lookup(linkedin_url)
                     profile_lookups += 1
 
         if not profile_text:
-            conn = sqlite3.connect(db.db_path)
-            conn.execute(
-                'UPDATE tracked_people SET last_scanned = ? WHERE id = ?',
-                (datetime.now().isoformat(), person['id'])
-            )
-            conn.commit()
-            conn.close()
+            with db._conn() as conn:
+                conn.execute(
+                    'UPDATE tracked_people SET last_scanned = ? WHERE id = ?',
+                    (datetime.now().isoformat(), person['id'])
+                )
+                conn.commit()
             continue
 
         # Claude analysis for change detection
@@ -1027,13 +1012,12 @@ Return ONLY valid JSON:
                 pass
 
         # Update last_scanned
-        conn = sqlite3.connect(db.db_path)
-        conn.execute(
-            'UPDATE tracked_people SET last_scanned = ? WHERE id = ?',
-            (datetime.now().isoformat(), person['id'])
-        )
-        conn.commit()
-        conn.close()
+        with db._conn() as conn:
+            conn.execute(
+                'UPDATE tracked_people SET last_scanned = ? WHERE id = ?',
+                (datetime.now().isoformat(), person['id'])
+            )
+            conn.commit()
 
     db.log_scan('watchlist_update', queries_run=len(people), signals_detected=new_signals)
     print(f"  Watchlist update complete: {len(people)} checked, {new_signals} new signals, "

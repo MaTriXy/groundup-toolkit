@@ -35,9 +35,6 @@ MAILTO=""
 # Health check - every 15 minutes
 */15 * * * * $TOOLKIT_ROOT/scripts/health-check.sh >> /var/log/toolkit-health.log 2>&1
 
-# WhatsApp watchdog - every 5 minutes
-*/5 * * * * $TOOLKIT_ROOT/scripts/load-env.sh watchdog -- $TOOLKIT_ROOT/scripts/whatsapp-watchdog.sh >> /var/log/whatsapp-watchdog.log 2>&1
-
 # Scheduled tasks (Shabbat-aware) - every 2 hours
 0 */2 * * * $TOOLKIT_ROOT/scripts/run-scheduled.sh >> /var/log/scheduled.log 2>&1
 

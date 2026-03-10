@@ -19,14 +19,26 @@ Items that need human decision or are too risky to execute autonomously.
 
 ---
 
-## Medium — Needs Clarification
+## Low — Remaining Items
 
-### 3. deck-analyzer deprecation path
-- **Issue:** deck-analyzer is a strict subset of deal-analyzer. Plan says deprecate it.
-- **Question:** Should we add deprecation notice only, or actually delete the skill?
-- **Status:** Will add deprecation notice per plan; deletion deferred
+### 3. State file consolidation
+- **Issue:** content-writer/state.json is in skills/ dir, deal-analyzer state in ~/.groundup-toolkit/state/
+- **Action:** Move all state to `data/` directory
+- **Status:** Deferred — low risk, cosmetic
 
-### 4. vc-automation/linkedin-api-helper.py
-- **Issue:** Non-functional (acknowledged in code). Plan says remove or archive.
-- **Question:** Archive to docs/archive/ or just delete?
-- **Status:** Will delete per plan; it provides no value
+### 4. Server deployment sync
+- **Issue:** All local repo changes need to be deployed to server (77.42.93.149)
+- **Action:** Copy updated scripts to `/root/` and `/root/.openclaw/scripts/` on server
+- **Status:** Deferred — do after all changes are committed
+
+---
+
+## Resolved
+
+- **deck-analyzer deprecation** — Deprecation notice added to SKILL.md
+- **vc-automation/linkedin-api-helper.py** — Deleted (non-functional)
+- **whatsapp-healthcheck.sh** — Deleted (redundant)
+- **whatsapp-watchdog.sh** — Deleted (escalation merged into health-check.sh)
+- **HubSpot stage IDs** — Added `stages` to config.yaml, reminders.py reads from config with fallback
+- **Opt-in handler** — Replaced source-code regex modification with JSON file (`data/meeting-brief-optin.json`)
+- **SQLite context managers** — All connections in scout.py and radar.py now use `with` blocks

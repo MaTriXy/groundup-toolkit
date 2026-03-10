@@ -15,8 +15,9 @@ sys.path.insert(0, os.path.expanduser('~/.openclaw'))
 from lib.config import config
 from lib.gws import gws_gmail_search, gws_gmail_thread_get, gws_gmail_modify, gws_gmail_send
 
-WHATSAPP_ACCOUNT = os.environ.get("WHATSAPP_ACCOUNT", "main")
-SCRIPT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "meeting-brief-automation.py")
+WHATSAPP_ACCOUNT = getattr(config, 'whatsapp_account', 'main')
+_TOOLKIT_ROOT = os.environ.get('TOOLKIT_ROOT', os.path.join(os.path.dirname(__file__), '..'))
+OPTIN_FILE = os.path.join(_TOOLKIT_ROOT, 'data', 'meeting-brief-optin.json')
 PROCESSED_LABEL = "MeetingBrief-Processed"
 
 # Team members with phone and email (loaded from config)
@@ -30,35 +31,40 @@ for m in config.team_members:
 # Reverse lookup: phone -> email
 PHONE_TO_EMAIL = {member['phone']: email for email, member in TEAM_MEMBERS.items()}
 
-def get_current_status(email):
-    """Read current opt-in status from script"""
-    with open(SCRIPT_PATH, 'r') as f:
-        content = f.read()
+def _load_optin_data():
+    """Load opt-in data from JSON file."""
+    import json
+    try:
+        with open(OPTIN_FILE, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
 
-    pattern = rf"'{re.escape(email)}':\s*{{[^}}]*'opted_in':\s*(True|False)"
-    match = re.search(pattern, content)
-    if match:
-        return match.group(1) == 'True'
-    return False
-
-def set_opt_in(email, opted_in):
-    """Update opt-in status for a team member"""
-    with open(SCRIPT_PATH, 'r') as f:
-        content = f.read()
-
-    pattern = rf"('{re.escape(email)}':\s*{{[^}}]*'opted_in':\s*)(True|False)"
-    replacement = rf"\g<1>{opted_in}"
-    new_content = re.sub(pattern, replacement, content)
-
-    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(SCRIPT_PATH))
+def _save_optin_data(data):
+    """Atomically save opt-in data to JSON file."""
+    import json
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(OPTIN_FILE))
     try:
         with os.fdopen(fd, 'w') as f:
-            f.write(new_content)
-        os.replace(tmp_path, SCRIPT_PATH)
+            json.dump(data, f, indent=2)
+        os.replace(tmp_path, OPTIN_FILE)
     except Exception:
         os.unlink(tmp_path)
         raise
 
+def get_current_status(email):
+    """Read current opt-in status from JSON file."""
+    data = _load_optin_data()
+    return data.get(email, {}).get('opted_in', False)
+
+def set_opt_in(email, opted_in):
+    """Update opt-in status for a team member."""
+    data = _load_optin_data()
+    if email not in data:
+        data[email] = {}
+    data[email]['opted_in'] = opted_in
+    data[email]['updated_at'] = datetime.now().isoformat()
+    _save_optin_data(data)
     return True
 
 def send_whatsapp(phone, message):

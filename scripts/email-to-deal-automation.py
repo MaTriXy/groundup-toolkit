@@ -9,6 +9,7 @@ import requests
 import glob
 from datetime import datetime, timedelta
 import re
+import fcntl
 
 # Support both local (scripts/../lib/) and server (~/.openclaw/lib/) layouts
 # sys.path fixed for gws migration
@@ -548,9 +549,27 @@ View: {deal_url}
         send_whatsapp(phone, f"❌ Error creating deal for '{company_name}'. Please try again.")
 
 def check_optin_optout_requests():
-    """Check for meeting brief opt-in/opt-out requests"""
-    MEETING_BRIEF_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'meeting-brief-automation.py')
+    """Check for meeting brief opt-in/opt-out requests using JSON config file."""
+    _TOOLKIT_ROOT = os.environ.get('TOOLKIT_ROOT', os.path.join(os.path.dirname(__file__), '..'))
+    OPTIN_FILE = os.path.join(_TOOLKIT_ROOT, 'data', 'meeting-brief-optin.json')
     OPTIN_LABEL = 'MeetingBrief-Processed'
+
+    def _load_optin():
+        try:
+            with open(OPTIN_FILE, 'r') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def _save_optin(data):
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(OPTIN_FILE))
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp, OPTIN_FILE)
+        except Exception:
+            os.unlink(tmp)
+            raise
 
     print(f'\n[{datetime.now()}] Checking opt-in/opt-out requests...')
 
@@ -594,31 +613,18 @@ def check_optin_optout_requests():
 
         member_name = TEAM_MEMBERS[sender_email]
 
-        # Update meeting brief script
         try:
-            with open(MEETING_BRIEF_SCRIPT, 'r') as f:
-                content = f.read()
-
-            # Check current status
-            pattern = rf"'{sender_email}':\s*{{[^}}]*'opted_in':\s*(True|False)"
-            match = re.search(pattern, content)
-            current_status = match.group(1) == 'True' if match else False
+            optin_data = _load_optin()
+            current_status = optin_data.get(sender_email, {}).get('opted_in', False)
 
             if opt_in and not current_status:
-                # Opt in
-                new_content = re.sub(
-                    rf"('{sender_email}':\s*{{[^}}]*'opted_in':\s*)(True|False)",
-                    r"\g<1>True",
-                    content
-                )
-                with open(MEETING_BRIEF_SCRIPT, 'w') as f:
-                    f.write(new_content)
-
-                print(f'  ✅ Opted in: {member_name} ({sender_email})')
+                optin_data[sender_email] = {'opted_in': True, 'updated_at': datetime.now().isoformat()}
+                _save_optin(optin_data)
+                print(f'  Opted in: {member_name} ({sender_email})')
 
                 confirmation = f"""Hi {member_name},
 
-You've been successfully opted in to Smart Meeting Briefs! 🎉
+You've been successfully opted in to Smart Meeting Briefs!
 
 You'll receive intelligent meeting prep via WhatsApp 10 minutes before each meeting with:
 - HubSpot deal context
@@ -631,19 +637,12 @@ To opt out: email "opt out of meeting briefs"
 
 - Meeting Brief Bot"""
 
-                send_email_simple(sender_email, "✅ Meeting Briefs - Opted In", confirmation)
+                send_email_simple(sender_email, "Meeting Briefs - Opted In", confirmation)
 
             elif opt_out and current_status:
-                # Opt out
-                new_content = re.sub(
-                    rf"('{sender_email}':\s*{{[^}}]*'opted_in':\s*)(True|False)",
-                    r"\g<1>False",
-                    content
-                )
-                with open(MEETING_BRIEF_SCRIPT, 'w') as f:
-                    f.write(new_content)
-
-                print(f'  ❌ Opted out: {member_name} ({sender_email})')
+                optin_data[sender_email] = {'opted_in': False, 'updated_at': datetime.now().isoformat()}
+                _save_optin(optin_data)
+                print(f'  Opted out: {member_name} ({sender_email})')
 
                 confirmation = f"""Hi {member_name},
 
@@ -659,7 +658,7 @@ To opt back in: email "opt in to meeting briefs"
 
             else:
                 action = "opted in" if current_status else "opted out"
-                print(f'  ℹ️  {member_name} already {action}')
+                print(f'  {member_name} already {action}')
 
             # Mark as processed
             mark_email_processed(thread_id)
@@ -1459,7 +1458,7 @@ def process_email(thread):
                 # Clean up temp file
                 try:
                     os.remove(pdf_path)
-                except:
+                except OSError:
                     pass
             else:
                 print(f'  ✗ Could not download attachment')
@@ -1508,7 +1507,7 @@ def process_email(thread):
                 payload = {'properties': {'description': company_data['description']}}
                 requests.patch(url, headers=headers, json=payload, timeout=10)
                 print(f'Updated company description with deck analysis')
-            except:
+            except Exception:
                 pass
     else:
         company_id = create_hubspot_company(company_data)
@@ -1766,6 +1765,15 @@ def process_roastmydeck_email(thread_id):
 
 
 def main():
+    # Prevent overlapping cron runs with file lock
+    lock_path = os.path.join(tempfile.gettempdir(), 'email-to-deal-automation.lock')
+    lock_file = open(lock_path, 'w')
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print('Another instance is already running, exiting.')
+        sys.exit(0)
+
     print(f'===== Email to Deal Automation =====')
     if not MATON_API_KEY:
         print('ERROR: MATON_API_KEY not set')

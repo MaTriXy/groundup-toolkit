@@ -12,6 +12,8 @@ Reusable modules imported by skills and scripts. Every shared function lives her
 - **whatsapp.py** — WhatsApp message sender via openclaw CLI
 - **email.py** — Email sender via gog/gws-auth CLI
 - **hubspot.py** — HubSpot CRM operations via Maton API gateway
+- **gws.py** — Google Workspace helper (gws-auth integration)
+- **safe_log.py** — Safe logging utilities (PII redaction)
 
 ## What does NOT belong here
 

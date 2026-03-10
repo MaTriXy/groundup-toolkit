@@ -191,7 +191,18 @@ class ToolkitConfig:
         p = self.get_pipeline_by_id(pipeline_id)
         if p and 'stage_names' in p:
             return p['stage_names'].get(stage_id, stage_id)
+        if p and 'stages' in p:
+            stage = p['stages'].get(stage_id, {})
+            return stage.get('label', stage_id) if isinstance(stage, dict) else stage_id
         return stage_id
+
+    def get_stage_map(self, pipeline_id=None):
+        """Return full stage map {stage_id: {label, tips}} from config.
+        Falls back to first pipeline if pipeline_id is None."""
+        p = self.get_pipeline_by_id(pipeline_id) if pipeline_id else (self.hubspot_pipelines[0] if self.hubspot_pipelines else None)
+        if p and 'stages' in p:
+            return p['stages']
+        return {}
 
     @property
     def hubspot_keep_on_radar_stage(self):

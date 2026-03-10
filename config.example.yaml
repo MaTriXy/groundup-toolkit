@@ -38,14 +38,39 @@ hubspot:
     - id: "default"                               # Pipeline ID from HubSpot
       name: "VC Deal Flow"                        # Human-readable name
       default_stage: "presentationscheduled"       # Stage ID for new deals
-      stage_names:                                 # Stage ID → display name mapping
-        presentationscheduled: "First Meeting"
-    # Add more pipelines as needed:
-    # - id: "your-pipeline-id"
-    #   name: "Another Pipeline"
-    #   default_stage: "your-stage-id"
-    #   stage_names:
-    #     "your-stage-id": "Qualified Leads"
+      stages:                                      # Stage ID → config mapping
+        qualifiedtobuy:
+          label: "Sourcing"
+          tips: "Initial screen — validate thesis fit, team background, and market size."
+        appointmentscheduled:
+          label: "Screening"
+          tips: "Deeper dive — understand product differentiation, early traction signals."
+        presentationscheduled:
+          label: "First Meeting"
+          tips: "Get specifics: unit economics, customer pipeline, go-to-market plan."
+        decisionmakerboughtin:
+          label: "IC Review"
+          tips: "Prepare for IC — gather reference points, comparable deals, key risks."
+        contractsent:
+          label: "Due Diligence"
+          tips: "Deep DD — financials, cap table, legal, customer references."
+        closedwon:
+          label: "Term Sheet Offered"
+          tips: "Negotiate terms — valuation, board seat, pro-rata rights."
+        closedlost:
+          label: "Pass"
+          tips: ""
+        # Custom stages (numeric IDs from HubSpot):
+        # "1112320899":
+        #   label: "Term Sheet Signed"
+        #   tips: "Legal close — coordinate with lawyers, finalize docs."
+        # "1112320900":
+        #   label: "Investment Closed"
+        #   tips: "Post-close — discuss board cadence, reporting expectations."
+        # "1008223160":
+        #   label: "Portfolio Monitoring"
+        #   tips: "Check-in — KPIs, runway, hiring progress."
+    # Add more pipelines as needed
   keep_on_radar_stage: ""             # HubSpot deal stage ID for "Keep on Radar" deals
 
 scheduling:

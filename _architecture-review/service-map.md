@@ -20,16 +20,14 @@ Complete reference for every service, skill, cron job, script, utility, and modu
   - `founder_scout` config section has no accessor -- skills must reach into `config._data` directly
 
 ### Config (JavaScript)
-- **File:** `lib/config.js` (36 lines)
-- **Purpose:** Node.js equivalent of config.py. Provides team member data, credentials, and paths for JS skills.
+- **File:** `lib/config.js`
+- **Purpose:** Node.js equivalent of config.py. Reads config.yaml dynamically via Python subprocess.
 - **Exposes:** `TOOLKIT_ROOT`, `config` object (assistant, team, credentials)
-- **Depends on:** `process.env`
+- **Depends on:** `config.yaml`, `.env`, Python3 subprocess
 - **Used by:** `camofox-join.js`, `christina-scheduler` (external repo)
 - **Notes:**
-  - **SECURITY: Contains hardcoded PII** (real names, emails, phone numbers, HubSpot owner IDs) committed to git
-  - Hardcoded `TOOLKIT_ROOT = "/root/.openclaw"` -- server-specific
-  - Does NOT read `config.yaml` -- fully static, must be manually updated when team changes
-  - Duplicate data structures (`team.members` and `teamMembers`)
+  - Dynamically reads config.yaml (no hardcoded PII)
+  - Uses `execFileSync` for safe subprocess invocation
 
 ### Safe URL
 - **File:** `lib/safe_url.py` (92 lines)
@@ -41,6 +39,47 @@ Complete reference for every service, skill, cron job, script, utility, and modu
   - DNS TOCTOU vulnerability (check-then-use with separate resolution)
   - Only supports GET requests
   - `MAX_REDIRECTS = 5`
+
+### Shared Claude Client
+- **File:** `lib/claude.py`
+- **Purpose:** Shared Claude API client with configurable retry logic (5 attempts), exponential backoff for 429/529 errors.
+- **Exposes:** `call_claude(prompt, model, max_tokens, temperature, timeout, retries)`
+- **Used by:** content-writer, deal-analyzer, founder-scout, keep-on-radar, meeting-reminders
+
+### Shared Brave Search Client
+- **File:** `lib/brave.py`
+- **Purpose:** Brave Search API client.
+- **Exposes:** `brave_search(query, count)`
+- **Used by:** content-writer, deal-analyzer, keep-on-radar
+
+### Shared WhatsApp Sender
+- **File:** `lib/whatsapp.py`
+- **Purpose:** WhatsApp message sender via openclaw CLI with retry logic.
+- **Exposes:** `send_whatsapp(phone, message, account)`
+- **Used by:** content-writer, deal-analyzer, founder-scout, keep-on-radar, meeting-reminders
+
+### Shared Email Sender
+- **File:** `lib/email.py`
+- **Purpose:** Email sender via gws-auth CLI.
+- **Exposes:** `send_email(to, subject, body, cc, bcc)`
+- **Used by:** content-writer, deal-analyzer, founder-scout, keep-on-radar
+
+### Shared HubSpot Client
+- **File:** `lib/hubspot.py`
+- **Purpose:** HubSpot CRM operations via Maton API gateway. Search, create, update companies/deals, add notes, manage associations.
+- **Exposes:** `search_company()`, `create_company()`, `create_deal()`, `update_deal_stage()`, `add_note()`, `fetch_deals_by_stage()`, etc.
+- **Used by:** deal-analyzer, keep-on-radar, meeting-reminders, email-to-deal
+
+### Google Workspace Helper
+- **File:** `lib/gws.py`
+- **Purpose:** Google Workspace integration via gws-auth CLI. Gmail search/read/send/modify, calendar, drive.
+- **Exposes:** `gws_gmail_search()`, `gws_gmail_thread_get()`, `gws_gmail_send()`, `gws_gmail_modify()`, `gws_gmail_attachment_download()`, `get_google_access_token()`
+- **Used by:** email-to-deal, keep-on-radar, meeting-brief-optin-handler
+
+### Safe Logging
+- **File:** `lib/safe_log.py`
+- **Purpose:** Logging utilities with PII redaction.
+- **Exposes:** `sanitize_error()`, `safe_error()`
 
 ### Environment Loader
 - **File:** `scripts/load-env.sh` (93 lines)
@@ -85,18 +124,17 @@ Complete reference for every service, skill, cron job, script, utility, and modu
   - Demo data has hardcoded dates evaluated at import time
   - No `requests.Session()` pooling despite 20+ HTTP calls per run
 
-### Deck Analyzer
+### Deck Analyzer [DEPRECATED]
 - **File:** `skills/deck-analyzer/analyzer.py` (201 lines)
 - **Entry point:** `skills/deck-analyzer/deck-analyzer` (150-line bash wrapper with inline Python)
 - **Purpose:** Simpler deck extraction tool. Extracts 8 structured fields from pitch decks using Claude Haiku. No research phase, no multi-section analysis.
 - **Exposes:** `extract_deck_links()`, `fetch_deck_content()`, `analyze_deck_with_claude()`, `parse_extracted_info()`, `format_company_description()`, `test_analyzer()`
-- **Depends on:** `lib/safe_url`, `requests`, Anthropic API (Haiku), `openclaw` CLI (browser for DocSend)
-- **Used by:** Can be called standalone; functionality largely subsumed by deal-analyzer
+- **Depends on:** `lib/config`, `lib/safe_url`, `requests`, Anthropic API (Haiku), `openclaw` CLI (browser for DocSend)
+- **Used by:** Can be called standalone; functionality subsumed by deal-analyzer
 - **Notes:**
-  - Reads `ANTHROPIC_API_KEY` directly from `os.environ` (not `config`) -- inconsistent with all other skills
+  - **DEPRECATED** — Use deal-analyzer instead
   - NO retry logic on Claude calls
   - Less comprehensive redirect handling than deal-analyzer
-  - **Likely orphaned** -- deal-analyzer has superset functionality
 
 ### Founder Scout
 - **File:** `skills/founder-scout/scout.py` (1232 lines)
@@ -223,7 +261,7 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 - **Depends on:** `openclaw browser` CLI, LinkedIn browser service (port 18801)
 - **Used by:** `founder-scout/scout.py`, `deal-analyzer/analyzer.py` (via DocSend), ad-hoc research
 - **Notes:**
-  - **Shell injection vulnerability on line 34**: `$QUERY` interpolated into Python string literal. Should use `sys.argv`.
+  - Shell injection fixed — `$QUERY` passed via `sys.argv[1]`
 
 ### Ping Teammate
 - **File:** `skills/ping-teammate/ping-teammate` (153-line bash script with inline Python)
@@ -260,15 +298,6 @@ Complete reference for every service, skill, cron job, script, utility, and modu
   - Saves reports to `/tmp/founder-research-*.md`
   - Gracefully degrades without Brave API key (but analysis will be speculative)
 
-### VC Automation - LinkedIn API Helper
-- **File:** `skills/vc-automation/linkedin-api-helper.py` (156 lines)
-- **Purpose:** LinkedIn API access via Maton gateway. Intended for profile lookups.
-- **Depends on:** `requests`, Maton API gateway (`gateway.maton.ai/linkedin`)
-- **Notes:**
-  - **Largely non-functional** -- LinkedIn API search requires Company/Org pages or ads API. The helper acknowledges this.
-  - Superseded by browser-based LinkedIn skill
-  - Uses placeholder `LINKEDIN_CONNECTION_ID` default
-
 ### Deal Logger
 - **File:** `skills/deal-logger/deal-logger.sh` (80-line bash script)
 - **Purpose:** Automated deal conversation tracking. Reads `~/deals.json`, queries OpenClaw logs, uses AI to match conversations to deals.
@@ -287,19 +316,17 @@ Complete reference for every service, skill, cron job, script, utility, and modu
 ## Scripts (Cron Jobs & Automation)
 
 ### Email-to-Deal Automation
-- **File:** `scripts/email-to-deal-automation.py` (1478 lines)
-- **Purpose:** Main deal pipeline. Monitors team emails for incoming deals, extracts companies from subjects, fetches/analyzes pitch decks, creates HubSpot companies/deals, sends confirmations via email/WhatsApp.
-- **Depends on:** `lib/config`, `lib/safe_url`, `requests`, Anthropic API (Haiku + Sonnet), HubSpot via Maton API, `gog` CLI (Gmail), `openclaw` CLI (WhatsApp), Camofox browser (DocSend), `pdftotext`
+- **File:** `scripts/email-to-deal-automation.py` (~1500 lines)
+- **Purpose:** Main deal pipeline. Monitors team emails for incoming deals, extracts companies from subjects, fetches/analyzes pitch decks, creates HubSpot companies/deals, sends confirmations via email/WhatsApp. Includes portfolio update detection.
+- **Depends on:** `lib/config`, `lib/gws`, `lib/safe_url`, `scripts/portfolio_monitor`, `requests`, Anthropic API (Haiku + Sonnet), HubSpot via Maton API, gws-auth CLI (Gmail), `openclaw` CLI (WhatsApp), Camofox browser (DocSend), `pdftotext`
 - **Used by:** Cron
 - **Cron schedule:** `*/10 * * * *`
 - **Notes:**
-  - Second largest file (1478 lines)
-  - Also handles opt-in/opt-out requests (duplicated logic with meeting-brief-optin-handler.py)
-  - Also scans WhatsApp session files for deal messages
-  - `safe_request` imported but never used
-  - `glob` and `timedelta` imported twice (top-level + inside function)
-  - Non-atomic file writes in opt-in handler (vs atomic in standalone handler)
-  - No lockfile to prevent concurrent runs
+  - Second largest file
+  - Uses `fcntl.flock` to prevent concurrent cron runs
+  - Portfolio email detection via `handle_portfolio_email()` before deal creation
+  - Company name extraction with domain + Claude fallback chain
+  - Also handles opt-in/opt-out requests and WhatsApp deal submissions
 
 ### Meeting Brief Opt-in Handler
 - **File:** `scripts/meeting-brief-optin-handler.py` (337 lines)
@@ -313,37 +340,20 @@ Complete reference for every service, skill, cron job, script, utility, and modu
   - `json` and `timedelta` imported but never used
 
 ### Health Check
-- **File:** `scripts/health-check.sh` (222 lines)
-- **Purpose:** System health monitor. Checks gateway, WhatsApp, disk, memory, Camofox, log sizes. Auto-recovery with email alerts.
-- **Depends on:** `systemctl`, `openclaw` CLI, `gog` CLI (email alerts), Camofox server (`localhost:9377/health`)
+- **File:** `scripts/health-check.sh` (~260 lines)
+- **Purpose:** System health monitor with full escalation chain. Checks gateway, WhatsApp, agents, disk, memory, Camofox, log sizes. Auto-recovery with email alerts + Twilio phone call escalation.
+- **Depends on:** `systemctl`, `openclaw` CLI, `gws-auth` CLI (email alerts), Twilio API (phone escalation), Camofox server (`localhost:9377/health`)
 - **Cron schedule:** `*/15 * * * *`
 - **Notes:**
-  - State files in `/tmp/alert-state-*` for dedup
-  - `TIMESTAMP` set once at start -- stale for long-running operations
-  - Step numbering inconsistency (steps labeled 1-6 but Camofox is 5b)
-  - Default alert email is placeholder
+  - State-file dedup for email alerts (one per incident)
+  - Twilio phone call escalation with 1-hour cooldown
+  - Standardized on `systemctl --user restart openclaw-gateway` for all restarts
+  - Subsumes all functionality from former whatsapp-watchdog.sh (escalation) and whatsapp-healthcheck.sh (deleted)
 
-### WhatsApp Watchdog
+### WhatsApp Watchdog [TO REMOVE]
 - **File:** `scripts/whatsapp-watchdog.sh` (138 lines)
-- **Purpose:** Active WhatsApp health monitor using real send test. Escalates to Twilio phone call + email on failure.
-- **Depends on:** `openclaw` CLI, `gog` CLI (email), Twilio API (phone calls), `python3` (URL encoding)
-- **Cron schedule:** `*/5 * * * *`
-- **Notes:**
-  - Sends real "." message every 5 minutes (creates noise)
-  - Gateway restart via `pkill + nohup` conflicts with systemd approach in health-check.sh
-  - Email alert has no cooldown (sends every 5 min on failure)
-  - `.env` loader doesn't strip quotes
-
-### WhatsApp Healthcheck
-- **File:** `scripts/whatsapp-healthcheck.sh` (71 lines)
-- **Purpose:** Simpler WhatsApp status check (no send test, no alerting). Two restart attempts on failure.
-- **Depends on:** `openclaw` CLI
-- **Cron schedule:** `0 * * * *` (hourly)
-- **Notes:**
-  - **Redundant** with whatsapp-watchdog.sh
-  - No alerting capability
-  - No `.env` loading
-  - Naive "connected"/"disconnected" string matching
+- **Purpose:** Active WhatsApp health monitor using real send test. Escalation logic merged into health-check.sh.
+- **Status:** Can be removed — all unique functionality (Twilio escalation) has been merged into health-check.sh.
 
 ### Daily Maintenance
 - **File:** `scripts/daily-maintenance.sh` (83 lines)

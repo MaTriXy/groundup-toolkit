@@ -1,10 +1,13 @@
 #!/bin/bash
 # GroundUp Toolkit Health Check & Auto-Recovery
 # Runs every 15 minutes via cron
-# Checks: gateway, WhatsApp, agents, disk/memory
+# Checks: gateway, WhatsApp, agents, disk/memory, Camofox, logs
+# Escalation: email alerts (deduped) + Twilio phone call (1h cooldown)
 #
 # Required environment variables (set in .env):
 #   ALERT_EMAIL     - Email address for alert notifications
+#   ALERT_PHONE     - Phone number for Twilio call escalation (optional)
+#   TWILIO_ACCOUNT_SID / TWILIO_API_KEY_SID / TWILIO_API_KEY_SECRET / TWILIO_FROM_NUMBER (optional)
 
 set +e
 
@@ -20,6 +23,8 @@ export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
 TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 ALERT_EMAIL="${ALERT_EMAIL:-admin@yourcompany.com}"
+ALERT_PHONE="${ALERT_PHONE:-}"
+ASSISTANT_WHATSAPP_PHONE="${ASSISTANT_WHATSAPP_PHONE:-}"
 ALERT_STATE_DIR="$HOME/.groundup-toolkit/state/health-alerts"
 mkdir -p "$ALERT_STATE_DIR"
 chmod 700 "$HOME/.groundup-toolkit/state" 2>/dev/null || true
@@ -69,6 +74,58 @@ clear_alert() {
     fi
 }
 
+# Escalate via Twilio phone call (for critical failures like WhatsApp down)
+# Requires: TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_FROM_NUMBER, ALERT_PHONE
+escalate_phone_call() {
+    local message="$1"
+    local key="${2:-phone-escalation}"
+    local state_file="$ALERT_STATE_DIR/${key}-call"
+    local cooldown=3600  # 1 hour
+
+    # Check cooldown
+    if [ -f "$state_file" ]; then
+        local last_call
+        last_call=$(cat "$state_file" 2>/dev/null || echo "0")
+        local now
+        now=$(date +%s)
+        local elapsed=$(( now - last_call ))
+        if [ "$elapsed" -lt "$cooldown" ]; then
+            log "Phone call cooldown active (${elapsed}s < ${cooldown}s), skipping"
+            return
+        fi
+    fi
+
+    if [ -z "$TWILIO_ACCOUNT_SID" ] || [ -z "$TWILIO_API_KEY_SID" ] || [ -z "$TWILIO_API_KEY_SECRET" ] || [ -z "$TWILIO_FROM_NUMBER" ] || [ -z "$ALERT_PHONE" ]; then
+        log "Twilio not configured, skipping phone call escalation"
+        return
+    fi
+
+    log "Calling $ALERT_PHONE: $message"
+    local twiml="<Response><Say voice=\"alice\">$message</Say><Pause length=\"2\"/><Say voice=\"alice\">$message</Say></Response>"
+
+    local _old_umask
+    _old_umask=$(umask)
+    umask 077
+    local _twilio_netrc
+    _twilio_netrc=$(mktemp /tmp/.twilio-netrc.XXXXXX)
+    umask "$_old_umask"
+    trap 'rm -f "$_twilio_netrc"' EXIT
+    printf 'machine api.twilio.com\n  login %s\n  password %s\n' \
+        "$TWILIO_API_KEY_SID" "$TWILIO_API_KEY_SECRET" > "$_twilio_netrc"
+
+    curl -s -X POST "https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Calls.json" \
+        --netrc-file "$_twilio_netrc" \
+        -d "To=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$ALERT_PHONE")" \
+        -d "From=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$TWILIO_FROM_NUMBER")" \
+        --data-urlencode "Twiml=$twiml" > /dev/null 2>&1
+
+    rm -f "$_twilio_netrc"
+    trap - EXIT
+
+    date +%s > "$state_file"
+    log "Phone call alert sent"
+}
+
 log "====================================="
 log "GroundUp Toolkit Health Check Start"
 log "====================================="
@@ -103,7 +160,7 @@ if echo "$HEALTH_OUTPUT" | grep -qi "linked"; then
     log "  Gateway RPC healthy"
 else
     fail "Gateway RPC probe failed. Restarting..."
-    openclaw gateway restart 2>/dev/null
+    systemctl --user restart openclaw-gateway 2>/dev/null
     sleep 10
 fi
 
@@ -117,7 +174,7 @@ if echo "$WA_OUTPUT" | grep -qi "linked.*running.*connected"; then
     clear_alert "whatsapp-down"
 elif echo "$WA_OUTPUT" | grep -qi "linked"; then
     warn "WhatsApp linked but may not be fully connected. Restarting gateway..."
-    openclaw gateway restart 2>/dev/null
+    systemctl --user restart openclaw-gateway 2>/dev/null
     sleep 15
     # Re-check
     WA_OUTPUT2=$(openclaw channels status --probe 2>&1)
@@ -126,10 +183,11 @@ elif echo "$WA_OUTPUT" | grep -qi "linked"; then
     else
         fail "WhatsApp failed to reconnect after restart!"
         send_alert "CRITICAL: WhatsApp Disconnected" "WhatsApp is disconnected and failed to recover after gateway restart. Manual intervention needed. Run: openclaw channels login" "whatsapp-down"
+        escalate_phone_call "Hey, the assistant WhatsApp is down and could not auto-recover. Please SSH into the server and run: openclaw channels login, to scan the QR code." "whatsapp-down"
     fi
 else
     fail "WhatsApp not linked! Restarting gateway..."
-    openclaw gateway restart 2>/dev/null
+    systemctl --user restart openclaw-gateway 2>/dev/null
     sleep 15
     WA_OUTPUT2=$(openclaw channels status --probe 2>&1)
     if echo "$WA_OUTPUT2" | grep -qi "linked.*running.*connected"; then
@@ -137,6 +195,7 @@ else
     else
         fail "WhatsApp failed to reconnect!"
         send_alert "CRITICAL: WhatsApp Disconnected" "WhatsApp is disconnected and failed to recover after gateway restart. Manual intervention needed. Run: openclaw channels login" "whatsapp-down"
+        escalate_phone_call "Hey, the assistant WhatsApp is down and could not auto-recover. Please SSH into the server and run: openclaw channels login, to scan the QR code." "whatsapp-down"
     fi
 fi
 

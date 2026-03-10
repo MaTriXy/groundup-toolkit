@@ -30,8 +30,6 @@ from lib.hubspot import (
 from lib.claude import call_claude
 
 # Enrichment library integration
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
-
 try:
     from enrichment import EnrichmentService
     ENRICHMENT_AVAILABLE = True
@@ -67,7 +65,8 @@ NUDGE_WINDOW_START = 30
 NUDGE_WINDOW_END = 40
 
 # VC pipeline stage map with talking point suggestions
-STAGE_MAP = {
+# Loaded from config.yaml if available, with hardcoded fallback
+_DEFAULT_STAGE_MAP = {
     'qualifiedtobuy': {
         'label': 'Sourcing',
         'tips': 'Initial screen — validate thesis fit, team background, and market size. Ask what made them start this company.',
@@ -109,6 +108,8 @@ STAGE_MAP = {
         'tips': 'Light touch — see what has changed since you last spoke, if timing is better now.',
     },
 }
+# Prefer config.yaml stages, fall back to hardcoded
+STAGE_MAP = config.get_stage_map() or _DEFAULT_STAGE_MAP
 
 
 class ReminderDatabase:

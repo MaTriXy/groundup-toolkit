@@ -118,3 +118,58 @@ Chronological record of every change made during the rearchitecture.
 - `skills/content-writer/SKILL.md`: `BRAVE_API_KEY` → `BRAVE_SEARCH_API_KEY`
 - `docs/skills.md`: `BRAVE_API_KEY` → `BRAVE_SEARCH_API_KEY`
 - `skills/meeting-bot/SKILL.md`: "Camofox" → "Camoufox" (correct product name)
+
+---
+
+## Remaining Structural Fixes
+
+### 2026-03-10 — Bare except, file lock, config consistency
+
+**Bare `except:` → specific exceptions:**
+- `scripts/email-to-deal-automation.py` line 1462: `except:` → `except OSError:`
+- `scripts/email-to-deal-automation.py` line 1511: `except:` → `except Exception:`
+
+**Concurrency protection:**
+- `scripts/email-to-deal-automation.py`: Added `fcntl.flock(LOCK_EX | LOCK_NB)` in `main()`
+
+**Config consistency:**
+- `skills/deck-analyzer/analyzer.py`: `os.environ.get('ANTHROPIC_API_KEY')` → `config.anthropic_api_key`
+- `scripts/meeting-brief-optin-handler.py`: `os.environ.get("WHATSAPP_ACCOUNT")` → `config.whatsapp_account`
+- `skills/meeting-reminders/reminders.py`: Removed redundant `sys.path.insert`
+
+### 2026-03-10 — Health monitoring consolidation
+
+- `scripts/health-check.sh`: Added `escalate_phone_call()` with Twilio + 1-hour cooldown
+- `scripts/health-check.sh`: Standardized all restarts to `systemctl --user restart openclaw-gateway`
+- `scripts/health-check.sh`: Added phone escalation to WhatsApp failure paths
+
+### 2026-03-10 — Delete whatsapp-watchdog.sh
+
+- Deleted `scripts/whatsapp-watchdog.sh` (escalation merged into health-check.sh)
+- Removed watchdog cron entry from `cron/crontab.example`
+
+### 2026-03-10 — HubSpot stage IDs in config
+
+- `config.example.yaml`: Added full `stages` map with labels and tips to pipeline config
+- `lib/config.py`: Added `get_stage_map()` method to read stages from config
+- `skills/meeting-reminders/reminders.py`: STAGE_MAP now loads from config with hardcoded fallback
+
+### 2026-03-10 — Opt-in handler → JSON config
+
+- Created `data/meeting-brief-optin.json` for opt-in state storage
+- `scripts/meeting-brief-optin-handler.py`: Replaced regex source-code modification with JSON read/write
+- `scripts/email-to-deal-automation.py`: Same — replaced regex source-code modification with JSON read/write
+- Both use atomic file write (tempfile + os.replace) for safety
+
+### 2026-03-10 — SQLite context managers
+
+- `skills/founder-scout/scout.py`: All ScoutDatabase methods + 3 loose calls now use `with db._conn() as conn:`
+- `skills/keep-on-radar/radar.py`: All RadarDatabase methods now use `with db._conn() as conn:`
+- Both use `contextlib.closing(sqlite3.connect(...))` for safe cleanup on exceptions
+
+### 2026-03-10 — Documentation updates
+
+- `_architecture-review/service-map.md`: Full update reflecting current state
+- `_architecture-review/refactor-summary.md`: Updated metrics and remaining items
+- `_architecture-review/blockers.md`: Moved completed items to Resolved
+- `lib/README.md`: Added gws.py and safe_log.py entries

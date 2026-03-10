@@ -12,9 +12,10 @@ from datetime import datetime
 
 # Add toolkit root to path for lib imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+from lib.config import config
 from lib.safe_url import is_safe_url, safe_request, ALLOWED_DECK_DOMAINS
 
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
+ANTHROPIC_API_KEY = config.anthropic_api_key
 
 
 def extract_deck_links(text):

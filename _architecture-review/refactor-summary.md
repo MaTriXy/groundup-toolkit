@@ -17,7 +17,10 @@ Summary of all changes made during the rearchitecture.
 | Duplicate `send_email()` | 4 copies | 1 shared |
 | HubSpot functions | ~15 scattered | 1 centralized module |
 | Security issues fixed | 3 critical/high | 2 fixed (PII, shell injection), 1 blocked (git history) |
-| Bare `except:` clauses | 4 | 0 |
+| Bare `except:` clauses | 6 | 0 |
+| Concurrency protection (email-to-deal) | None | `fcntl.flock` |
+| Health monitoring scripts | 3 (health-check, watchdog, healthcheck) | 1 (health-check with Twilio escalation) |
+| Gateway restart methods | 3 (systemctl, pkill+nohup, openclaw gateway restart) | 1 (systemctl) |
 | Cron jobs in crontab.example | 11 | 14 (added 3 missing) |
 
 ---
@@ -52,7 +55,11 @@ Summary of all changes made during the rearchitecture.
 - `skills/meeting-bot/SKILL.md` — Fixed Camofox → Camoufox naming
 - `skills/deck-analyzer/SKILL.md` — Added deprecation notice
 - `skills/content-writer/SKILL.md` — Fixed BRAVE_API_KEY → BRAVE_SEARCH_API_KEY
-- `scripts/email-to-deal-automation.py` — Removed dead import, fixed bare except, added file lock
+- `scripts/email-to-deal-automation.py` — Removed dead import, fixed 2 bare except, added fcntl.flock
+- `scripts/health-check.sh` — Added Twilio phone escalation, standardized restarts to systemctl
+- `skills/deck-analyzer/analyzer.py` — Changed os.environ to config.anthropic_api_key
+- `scripts/meeting-brief-optin-handler.py` — Changed os.environ to config.whatsapp_account
+- `skills/meeting-reminders/reminders.py` — Removed redundant sys.path.insert
 - `scripts/meeting-brief-optin-handler.py` — Removed dead imports/function, fixed bare except
 - `cron/crontab.example` — Added MAILTO, 3 missing jobs
 - `docs/skills.md` — Fixed BRAVE_API_KEY naming
@@ -71,14 +78,13 @@ Summary of all changes made during the rearchitecture.
 - `skills/meeting-bot/test-join.js`
 - `skills/vc-automation/linkedin-api-helper.py`
 - `scripts/whatsapp-healthcheck.sh`
+- `scripts/whatsapp-watchdog.sh`
 
 ---
 
 ## Remaining Items (see blockers.md)
 
 1. **Google cookies in git history** — Requires `git filter-repo` force-push (destructive, needs coordination)
-2. **Server vs repo divergence** — gws-auth migration done on server but not in repo
-3. **Health monitoring consolidation** — Merge whatsapp-watchdog escalation into health-check.sh (deferred)
-4. **HubSpot stage IDs in config** — Move hardcoded stage ID `1138024523` to config.yaml (deferred)
-5. **SQLite context managers** — Wrap connections in `with` blocks (low priority)
-6. **State file consolidation** — Move content-writer/state.json and deal-analyzer state to data/ (low priority)
+2. **Server vs repo divergence** — gws-auth migration done on server but not in repo (Phase 8 of modernization plan)
+3. **State file consolidation** — Move content-writer/state.json and deal-analyzer state to data/
+4. **Server deployment** — Sync all repo changes to server (77.42.93.149)

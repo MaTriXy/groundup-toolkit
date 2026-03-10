@@ -22,6 +22,7 @@ import json
 import time
 import fcntl
 import sqlite3
+import contextlib
 import tempfile
 import subprocess
 import requests
@@ -80,54 +81,54 @@ class RadarDatabase:
         self.db_path = db_path
         self._init_db()
 
+    def _conn(self):
+        """Return a connection as a context manager for safe cleanup."""
+        return contextlib.closing(sqlite3.connect(self.db_path))
+
     def _init_db(self):
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS radar_reviews (
-            review_month TEXT NOT NULL,
-            deal_id TEXT NOT NULL,
-            owner_email TEXT NOT NULL,
-            sent_at TEXT NOT NULL,
-            PRIMARY KEY (review_month, deal_id)
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS radar_actions (
-            deal_id TEXT NOT NULL,
-            action TEXT NOT NULL,
-            action_source TEXT NOT NULL,
-            actioned_at TEXT NOT NULL,
-            review_month TEXT NOT NULL,
-            details TEXT,
-            PRIMARY KEY (review_month, deal_id)
-        )''')
-        conn.commit()
-        conn.close()
+        with self._conn() as conn:
+            c = conn.cursor()
+            c.execute('''CREATE TABLE IF NOT EXISTS radar_reviews (
+                review_month TEXT NOT NULL,
+                deal_id TEXT NOT NULL,
+                owner_email TEXT NOT NULL,
+                sent_at TEXT NOT NULL,
+                PRIMARY KEY (review_month, deal_id)
+            )''')
+            c.execute('''CREATE TABLE IF NOT EXISTS radar_actions (
+                deal_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                action_source TEXT NOT NULL,
+                actioned_at TEXT NOT NULL,
+                review_month TEXT NOT NULL,
+                details TEXT,
+                PRIMARY KEY (review_month, deal_id)
+            )''')
+            conn.commit()
 
     def is_already_reviewed(self, review_month, deal_id):
-        conn = sqlite3.connect(self.db_path)
-        result = conn.execute(
-            'SELECT 1 FROM radar_reviews WHERE review_month = ? AND deal_id = ?',
-            (review_month, str(deal_id))
-        ).fetchone() is not None
-        conn.close()
+        with self._conn() as conn:
+            result = conn.execute(
+                'SELECT 1 FROM radar_reviews WHERE review_month = ? AND deal_id = ?',
+                (review_month, str(deal_id))
+            ).fetchone() is not None
         return result
 
     def mark_reviewed(self, review_month, deal_id, owner_email):
-        conn = sqlite3.connect(self.db_path)
-        conn.execute(
-            'INSERT OR REPLACE INTO radar_reviews (review_month, deal_id, owner_email, sent_at) VALUES (?, ?, ?, ?)',
-            (review_month, str(deal_id), owner_email, datetime.now().isoformat())
-        )
-        conn.commit()
-        conn.close()
+        with self._conn() as conn:
+            conn.execute(
+                'INSERT OR REPLACE INTO radar_reviews (review_month, deal_id, owner_email, sent_at) VALUES (?, ?, ?, ?)',
+                (review_month, str(deal_id), owner_email, datetime.now().isoformat())
+            )
+            conn.commit()
 
     def record_action(self, review_month, deal_id, action, source, details=''):
-        conn = sqlite3.connect(self.db_path)
-        conn.execute(
-            'INSERT OR REPLACE INTO radar_actions (review_month, deal_id, action, action_source, actioned_at, details) VALUES (?, ?, ?, ?, ?, ?)',
-            (review_month, str(deal_id), action, source, datetime.now().isoformat(), details)
-        )
-        conn.commit()
-        conn.close()
+        with self._conn() as conn:
+            conn.execute(
+                'INSERT OR REPLACE INTO radar_actions (review_month, deal_id, action, action_source, actioned_at, details) VALUES (?, ?, ?, ?, ?, ?)',
+                (review_month, str(deal_id), action, source, datetime.now().isoformat(), details)
+            )
+            conn.commit()
 
 
 # call_claude, brave_search imported from lib/
