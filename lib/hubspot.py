@@ -442,7 +442,7 @@ def search_contact(email=None, linkedin_url=None, name=None):
     if email:
         filters = [{"propertyName": "email", "operator": "EQ", "value": email}]
     elif linkedin_url:
-        filters = [{"propertyName": "hs_linkedinid", "operator": "EQ", "value": linkedin_url}]
+        filters = [{"propertyName": "hs_linkedin_url", "operator": "EQ", "value": linkedin_url}]
     elif name:
         filters = [{"propertyName": "firstname", "operator": "CONTAINS_TOKEN", "value": name.split()[0]}]
     else:
@@ -454,7 +454,7 @@ def search_contact(email=None, linkedin_url=None, name=None):
             headers=_HEADERS,
             json={
                 "filterGroups": [{"filters": filters}],
-                "properties": ["firstname", "lastname", "email", "hs_linkedinid",
+                "properties": ["firstname", "lastname", "email", "hs_linkedin_url",
                                "lifecyclestage", "hs_lead_status", "company"],
                 "limit": 5,
             },
@@ -487,7 +487,7 @@ def create_contact(firstname, lastname="", linkedin_url=None, properties=None):
     Args:
         firstname: First name.
         lastname: Last name.
-        linkedin_url: LinkedIn profile URL (stored in hs_linkedinid).
+        linkedin_url: LinkedIn profile URL (stored in hs_linkedin_url).
         properties: Additional properties dict.
 
     Returns:
@@ -499,7 +499,7 @@ def create_contact(firstname, lastname="", linkedin_url=None, properties=None):
     props = {"firstname": firstname, "lastname": lastname,
              "lifecyclestage": "lead"}
     if linkedin_url:
-        props["hs_linkedinid"] = linkedin_url
+        props["hs_linkedin_url"] = linkedin_url
     if properties:
         props.update(properties)
 

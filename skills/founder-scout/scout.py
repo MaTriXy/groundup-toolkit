@@ -1150,16 +1150,11 @@ def run_sync_hubspot():
         linkedin_url = person.get('linkedin_url')
         hubspot_id = person.get('hubspot_contact_id')
 
-        # Already synced — update signal tier
+        # Already synced — update lead status if approached
         if hubspot_id:
             props = {}
-            tier = person.get('signal_tier')
-            if tier:
-                props['scout_signal_tier'] = tier
-            if person.get('last_signal'):
-                props['scout_last_signal'] = person['last_signal'][:200]
             if person.get('approached'):
-                props['hs_lead_status'] = 'CONTACTED'
+                props['hs_lead_status'] = 'ATTEMPTED_TO_CONTACT'
             if props:
                 update_contact(hubspot_id, props)
                 updated += 1
@@ -1178,10 +1173,8 @@ def run_sync_hubspot():
             hubspot_id = existing['id']
             db.set_hubspot_contact_id(person['id'], hubspot_id)
             props = {'lifecyclestage': 'lead'}
-            if person.get('signal_tier'):
-                props['scout_signal_tier'] = person['signal_tier']
             if person.get('approached'):
-                props['hs_lead_status'] = 'CONTACTED'
+                props['hs_lead_status'] = 'ATTEMPTED_TO_CONTACT'
             update_contact(hubspot_id, props)
             updated += 1
             print(f"  Linked existing: {name} → {hubspot_id}")
@@ -1193,12 +1186,8 @@ def run_sync_hubspot():
         lastname = parts[1] if len(parts) > 1 else ''
 
         extra_props = {}
-        if person.get('signal_tier'):
-            extra_props['scout_signal_tier'] = person['signal_tier']
-        if person.get('last_signal'):
-            extra_props['scout_last_signal'] = person['last_signal'][:200]
         if person.get('approached'):
-            extra_props['hs_lead_status'] = 'CONTACTED'
+            extra_props['hs_lead_status'] = 'ATTEMPTED_TO_CONTACT'
 
         contact_id = create_contact(firstname, lastname, linkedin_url, extra_props)
         if contact_id:
@@ -1240,8 +1229,8 @@ def run_approach(name_query):
     # Update HubSpot if contact exists
     hubspot_id = person.get('hubspot_contact_id')
     if hubspot_id:
-        update_contact(hubspot_id, {'hs_lead_status': 'CONTACTED'})
-        print(f"  HubSpot contact {hubspot_id} updated: hs_lead_status → CONTACTED")
+        update_contact(hubspot_id, {'hs_lead_status': 'ATTEMPTED_TO_CONTACT'})
+        print(f"  HubSpot contact {hubspot_id} updated: hs_lead_status → ATTEMPTED_TO_CONTACT")
     else:
         print(f"  No HubSpot contact yet. Run 'founder-scout sync-hubspot' to create it.")
 
@@ -1265,8 +1254,8 @@ def run_approach_by_id(person_id):
 
     hubspot_id = person.get('hubspot_contact_id')
     if hubspot_id:
-        update_contact(hubspot_id, {'hs_lead_status': 'CONTACTED'})
-        print(f"  HubSpot contact {hubspot_id} updated: hs_lead_status → CONTACTED")
+        update_contact(hubspot_id, {'hs_lead_status': 'ATTEMPTED_TO_CONTACT'})
+        print(f"  HubSpot contact {hubspot_id} updated: hs_lead_status → ATTEMPTED_TO_CONTACT")
 
 
 # --- Entry Point ---
