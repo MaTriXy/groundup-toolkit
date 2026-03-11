@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, MessageSquare, Settings, ChevronLeft, ChevronRight } from "lucide-react"
+import { LayoutDashboard, MessageSquare, Settings, ChevronLeft, ChevronRight, Briefcase } from "lucide-react"
 import { ChristinaAvatar } from "@/components/ChristinaAvatar"
 import { OnlineDot } from "./StatusBadge"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import Image from "next/image"
 
 const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/" },
+  { label: "Portfolio", icon: Briefcase, href: "/portfolio" },
   { label: "Chat", icon: MessageSquare, href: "#chat" },
   { label: "Settings", icon: Settings, href: "/settings" },
 ]
