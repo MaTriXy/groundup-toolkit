@@ -256,6 +256,16 @@ class ScoutDatabase:
 
     def record_signal(self, person_id, signal_type, tier, description, source_url=None):
         with self._conn() as conn:
+            # Dedup: skip if same person + type + description already exists in last 7 days
+            week_ago = (datetime.now() - timedelta(days=7)).isoformat()
+            existing = conn.execute(
+                '''SELECT 1 FROM signal_history
+                   WHERE person_id = ? AND signal_type = ? AND description = ? AND detected_at >= ?''',
+                (person_id, signal_type, description, week_ago)
+            ).fetchone()
+            if existing:
+                return False
+
             conn.execute(
                 'INSERT INTO signal_history (person_id, signal_type, signal_tier, description, source_url, detected_at) VALUES (?, ?, ?, ?, ?, ?)',
                 (person_id, signal_type, tier, description, source_url, datetime.now().isoformat())
@@ -265,6 +275,7 @@ class ScoutDatabase:
                 (tier, description, datetime.now().isoformat(), person_id)
             )
             conn.commit()
+            return True
 
     def get_signals_since(self, since_date):
         with self._conn() as conn:
@@ -933,11 +944,25 @@ def run_daily_scan():
             print(f"      RELEVANT: {summary}")
             p['analysis_summary'] = summary
             p['current_title'] = title
+
+            # Add to watchlist (idempotent — INSERT OR IGNORE on linkedin_url)
+            person_id = db.add_person(name, url, 'daily_scan')
+            if person_id:
+                db.record_signal(person_id, 'linkedin_new_founder', 'high', summary, url)
+                headline = p.get('headline') or title
+                if headline:
+                    with db._conn() as conn:
+                        conn.execute('UPDATE tracked_people SET headline = ? WHERE id = ?', (headline, person_id))
+                        conn.commit()
+
             # Extract GitHub URL from profile
             gh_url = extract_github_from_linkedin(profile_text)
             if gh_url:
                 p['github_url'] = gh_url
                 print(f"      Found GitHub: {gh_url}")
+                if person_id:
+                    db.set_github_url(person_id, gh_url)
+
             relevant.append(p)
         else:
             summary = analysis.get('summary', 'Not relevant')
@@ -1282,15 +1307,16 @@ def _auto_detect_approached(db, people):
     for person in unapproached:
         name = person['name'].lower()
         parts = name.split()
-        # Check: person's last name in any deal name, or person's full name
+        # Match requires full name in deal name, or both first AND last name present
+        # (avoids false positives from common last names like "Cohen", "Lev", etc.)
         matched = False
         for deal_name in all_deal_names:
-            # Match by last name (most common — deal is named after company, founder's last name often matches)
-            if len(parts) > 1 and parts[-1] in deal_name:
+            # Match by full name (e.g. "yuval lev" in "Yuval Lev - Stealth")
+            if name in deal_name:
                 matched = True
                 break
-            # Match by full name
-            if name in deal_name:
+            # Match if both first AND last name appear in deal name (handles "Lev Labs" + "Yuval")
+            if len(parts) >= 2 and all(p in deal_name for p in parts):
                 matched = True
                 break
 
