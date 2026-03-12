@@ -1601,15 +1601,14 @@ def run_github_scan():
         high_signals = [s for s in github_signals if s['signal_tier'] == 'high']
 
         if high_signals and SCOUT_RECIPIENTS:
-            subject = f"🐙 GitHub Alert: {len(high_signals)} new signal{'s' if len(high_signals) > 1 else ''}"
-            body_lines = [f"<h3>GitHub Signals Detected</h3>"]
+            subject = f"GitHub Alert: {len(high_signals)} new signal{'s' if len(high_signals) > 1 else ''}"
+            body_lines = ["GitHub Signals Detected", "=" * 25, ""]
             for s in high_signals:
                 url = s.get('source_url', '')
-                body_lines.append(
-                    f"<p><b>{s['name']}</b>: {s['description']}"
-                    + (f' — <a href="{url}">{url}</a>' if url else '')
-                    + "</p>"
-                )
+                body_lines.append(f"- {s['name']}: {s['description']}")
+                if url:
+                    body_lines.append(f"  {url}")
+                body_lines.append("")
 
             for recip in SCOUT_RECIPIENTS:
                 send_email(recip['email'], subject, '\n'.join(body_lines))
