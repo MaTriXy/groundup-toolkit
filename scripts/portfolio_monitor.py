@@ -383,9 +383,41 @@ def handle_portfolio_email(original_sender_email: str, subject: str, body: str, 
     print(f"  → Portfolio email detected: {company_name}")
 
     company = find_portfolio_company(company_name)
+    # Fallback: search by domain
     if not company:
-        print(f"  ✗ {company_name} not found in HubSpot")
-        return None
+        domain = COMPANY_TO_DOMAIN.get(company_name)
+        if domain:
+            resp = requests.post(
+                f"{BASE}/crm/v3/objects/companies/search",
+                headers=HEADERS,
+                json={
+                    "filterGroups": [{"filters": [{"propertyName": "domain", "operator": "EQ", "value": domain}]}],
+                    "properties": ["name", "domain", "description"],
+                    "limit": 1,
+                },
+                timeout=10,
+            )
+            results = resp.json().get("results", []) if resp.status_code == 200 else []
+            if results:
+                company = results[0]
+                print(f"  → Found company by domain {domain}: {company.get('properties', {}).get('name', '?')}")
+    # Fallback: create the portfolio company if it doesn't exist at all
+    if not company:
+        print(f"  {company_name} not found in HubSpot — creating portfolio company")
+        domain = COMPANY_TO_DOMAIN.get(company_name, "")
+        create_resp = requests.post(
+            f"{BASE}/crm/v3/objects/companies",
+            headers=HEADERS,
+            json={"properties": {"name": company_name, "domain": domain, "lifecyclestage": "customer"}},
+            timeout=10,
+        )
+        if create_resp.status_code in (200, 201):
+            company = create_resp.json()
+            print(f"  ✓ Created portfolio company: {company_name} (ID: {company['id']})")
+        else:
+            print(f"  ✗ Failed to create portfolio company {company_name}")
+            # Return a stub so we DON'T fall through to deal creation
+            return {"company_name": company_name, "skipped": True}
 
     company_id = company["id"]
     content = f"Subject: {subject}\n\n{body}"
