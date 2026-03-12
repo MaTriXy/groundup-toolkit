@@ -1716,8 +1716,8 @@ def process_roastmydeck_email(thread_id):
 
     deal_description = "\n".join(deal_desc_parts)
 
-    # Check for existing deal (dedup)
-    existing_deal_id = search_hubspot_deal(company_name)
+    # Check for existing deal (dedup) — check both with and without [RoastMyDeck] prefix
+    existing_deal_id = search_hubspot_deal(company_name) or search_hubspot_deal(f"[RoastMyDeck] {company_name}")
     if existing_deal_id:
         print(f"  Skipping: deal '{company_name}' already exists (ID: {existing_deal_id})")
         mark_email_processed(thread_id)
@@ -1740,7 +1740,7 @@ def process_roastmydeck_email(thread_id):
     h = {"Authorization": f"Bearer {MATON_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "properties": {
-            "dealname": company_name,
+            "dealname": f"[RoastMyDeck] {company_name}",
             "dealstage": stage_id,
             "pipeline": pipeline_id,
             "description": deal_description,
